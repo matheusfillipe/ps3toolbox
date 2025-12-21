@@ -37,7 +37,7 @@ def build_limg_header(iso_path: Path, iso_size: int) -> bytes:
     if is_dvd:
         struct.pack_into('>I', header, 0x0C, 0x00000800)
     else:
-        struct.pack_into('>H', header, 0x0C, 0x0930)
+        struct.pack_into('>I', header, 0x0C, 0x00000930)
 
     return bytes(header)
 

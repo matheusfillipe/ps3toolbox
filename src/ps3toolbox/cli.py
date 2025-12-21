@@ -21,7 +21,7 @@ def cli() -> None:
 
 @cli.command()
 @click.argument('input_path', type=click.Path(exists=True, path_type=Path))
-@click.argument('output_path', type=click.Path(path_type=Path))
+@click.argument('output_path', type=click.Path(path_type=Path), required=False)
 @click.option('--mode', type=click.Choice(['cex', 'dex']), default='cex',
               help='Console mode (cex=retail, dex=debug)')
 @click.option('--content-id', type=str, default=None,
@@ -32,13 +32,16 @@ def cli() -> None:
               help='Remove source ISO after successful encryption')
 def encrypt(
     input_path: Path,
-    output_path: Path,
+    output_path: Path | None,
     mode: str,
     content_id: str | None,
     overwrite: bool,
     remove_source: bool
 ) -> None:
     """Encrypt PS2 ISO to .BIN.ENC format."""
+    if output_path is None:
+        output_path = input_path.with_suffix('.bin.enc')
+
     try:
         validate_input_file(input_path, ['.iso'])
         validate_output_path(output_path, overwrite)

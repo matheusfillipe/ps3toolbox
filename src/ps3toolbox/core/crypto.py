@@ -1,8 +1,9 @@
 """Low-level cryptographic operations."""
 
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.backends import default_backend
 from hashlib import sha1
+
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 
 def aes128_cbc_encrypt(key: bytes, iv: bytes, data: bytes) -> bytes:
@@ -36,7 +37,6 @@ def calculate_sha1(data: bytes) -> bytes:
 
 def calculate_omac(data: bytes, key: bytes) -> bytes:
     """Calculate OMAC (CMAC) for NPD authentication."""
-    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
     running = bytearray(16)
 
@@ -61,7 +61,7 @@ def calculate_omac(data: bytes, key: bytes) -> bytes:
         overrun = 16
 
     hash_block = bytearray(16)
-    hash_block[:overrun] = data[offset:offset + overrun]
+    hash_block[:overrun] = data[offset : offset + overrun]
 
     if overrun != 16:
         hash_block[overrun] = 0x80
