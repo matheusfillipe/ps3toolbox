@@ -1,13 +1,18 @@
 """Interactive CLI interface for PS3 Toolbox."""
 
+import asyncio
 import click
+import os
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from rich.console import Console
 from rich.table import Table
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
 from ps3toolbox.ps2.encrypt import encrypt_ps2_iso
 from ps3toolbox.ps2.decrypt import decrypt_ps2_iso, extract_metadata
 from ps3toolbox.utils.progress import ConsoleProgress
 from ps3toolbox.utils.validation import validate_input_file, validate_output_path, check_disk_space
+from ps3toolbox.utils.disc_detect import detect_disc_number
 
 console = Console()
 
@@ -26,6 +31,8 @@ def cli() -> None:
               help='Console mode (cex=retail, dex=debug)')
 @click.option('--content-id', type=str, default=None,
               help='Content ID (uses placeholder if omitted)')
+@click.option('--disc-num', type=click.IntRange(1, 9), default=1,
+              help='Disc number for multi-disc games (1-9)')
 @click.option('--overwrite/--no-overwrite', default=False,
               help='Overwrite existing output file')
 @click.option('--remove-source/--keep-source', default=False,
@@ -35,6 +42,7 @@ def encrypt(
     output_path: Path | None,
     mode: str,
     content_id: str | None,
+    disc_num: int,
     overwrite: bool,
     remove_source: bool
 ) -> None:
@@ -55,6 +63,7 @@ def encrypt(
             output_path,
             mode=mode,
             content_id=content_id,
+            disc_num=disc_num,
             progress_callback=progress.update
         )
 
@@ -109,27 +118,73 @@ def decrypt(
         raise click.Abort()
 
 
+def _encrypt_single_iso(args):
+    """Worker function for parallel encryption.
+
+    Args:
+        args: Tuple of (iso_file, output_file, mode, disc_num_override)
+
+    Returns:
+        Tuple of (iso_file, success, error_message, should_remove)
+    """
+    iso_file, output_file, mode, disc_num_override, remove_source = args
+
+    try:
+        if output_file.exists():
+            return (iso_file, 'skipped', None, False)
+
+        detected_disc = disc_num_override if disc_num_override else detect_disc_number(iso_file.name)
+
+        encrypt_ps2_iso(
+            iso_file,
+            output_file,
+            mode=mode,
+            disc_num=detected_disc,
+            progress_callback=None
+        )
+
+        return (iso_file, 'success', detected_disc, remove_source)
+
+    except Exception as e:
+        return (iso_file, 'error', str(e), False)
+
+
 @cli.command()
 @click.argument('directory', type=click.Path(exists=True, file_okay=False, path_type=Path))
 @click.option('--recursive/--no-recursive', default=True,
               help='Process subdirectories recursively')
 @click.option('--mode', type=click.Choice(['cex', 'dex']), default='cex',
               help='Console mode (cex=retail, dex=debug)')
+@click.option('--disc-num', type=click.IntRange(1, 9), default=None,
+              help='Override disc number for ALL files (default: auto-detect from filename)')
 @click.option('--overwrite/--no-overwrite', default=False,
               help='Overwrite existing encrypted files')
 @click.option('--remove-source/--keep-source', default=False,
               help='Remove source ISOs after successful encryption')
 @click.option('--pattern', type=str, default='*.iso',
               help='File pattern to match')
+@click.option('--workers', type=int, default=None,
+              help='Number of parallel workers (default: CPU count)')
 def batch_encrypt(
     directory: Path,
     recursive: bool,
     mode: str,
+    disc_num: int | None,
     overwrite: bool,
     remove_source: bool,
-    pattern: str
+    pattern: str,
+    workers: int | None
 ) -> None:
-    """Batch encrypt PS2 ISOs in directory."""
+    """Batch encrypt PS2 ISOs in directory with parallel processing.
+
+    Automatically detects disc numbers from filenames:
+    - "Game (Disc 1).iso" → disc 1
+    - "Game [Disc 2].iso" → disc 2
+    - "Game - CD3.iso" → disc 3
+
+    Use --disc-num to override auto-detection for all files.
+    Use --workers to control parallel processing (default: CPU count).
+    """
     glob_pattern = f"**/{pattern}" if recursive else pattern
     iso_files = list(directory.glob(glob_pattern))
 
@@ -137,43 +192,68 @@ def batch_encrypt(
         console.print(f"[yellow]No ISO files found matching pattern: {pattern}[/yellow]")
         return
 
-    console.print(f"Found {len(iso_files)} ISO file(s)")
+    num_workers = workers or os.cpu_count()
+    console.print(f"Found {len(iso_files)} ISO file(s), using {num_workers} workers")
+
+    # Prepare work items
+    work_items = []
+    skipped_count = 0
+
+    for iso_file in iso_files:
+        output_file = iso_file.with_suffix('.bin.enc')
+
+        if output_file.exists() and not overwrite:
+            console.print(f"[yellow]⊘[/yellow] Skipping {iso_file.name} (output exists)")
+            skipped_count += 1
+            continue
+
+        work_items.append((iso_file, output_file, mode, disc_num, remove_source))
+
+    if not work_items:
+        console.print(f"[yellow]All files already encrypted (use --overwrite to re-encrypt)[/yellow]")
+        return
+
+    console.print(f"Encrypting {len(work_items)} file(s)...\n")
 
     success_count = 0
     error_count = 0
     removed_count = 0
 
-    for iso_file in iso_files:
-        output_file = iso_file.with_suffix('.bin.enc')
+    # Process in parallel
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+        TimeElapsedColumn(),
+        console=console
+    ) as progress:
+        overall_task = progress.add_task("[cyan]Processing...", total=len(work_items))
 
-        try:
-            if output_file.exists() and not overwrite:
-                console.print(f"[yellow]⊘[/yellow] Skipping {iso_file.name} (output exists)")
-                continue
+        with ProcessPoolExecutor(max_workers=num_workers) as executor:
+            futures = {executor.submit(_encrypt_single_iso, item): item for item in work_items}
 
-            progress = ConsoleProgress(f"Encrypting {iso_file.name}")
-            progress.start(iso_file.stat().st_size)
+            for future in as_completed(futures):
+                iso_file, status, result, should_remove = future.result()
 
-            encrypt_ps2_iso(
-                iso_file,
-                output_file,
-                mode=mode,
-                progress_callback=progress.update
-            )
+                if status == 'success':
+                    disc_info = f" [disc {result}]" if result > 1 else ""
+                    console.print(f"[green]✓[/green] {iso_file.name}{disc_info}")
+                    success_count += 1
 
-            progress.finish()
-            console.print(f"[green]✓[/green] {iso_file.name}")
-            success_count += 1
+                    if should_remove:
+                        iso_file.unlink()
+                        removed_count += 1
 
-            if remove_source:
-                iso_file.unlink()
-                removed_count += 1
+                elif status == 'error':
+                    console.print(f"[red]✗[/red] {iso_file.name}: {result}")
+                    error_count += 1
 
-        except Exception as e:
-            console.print(f"[red]✗[/red] {iso_file.name}: {e}")
-            error_count += 1
+                progress.advance(overall_task)
 
     console.print(f"\n[bold]Summary:[/bold] {success_count} succeeded, {error_count} failed")
+    if skipped_count > 0:
+        console.print(f"[yellow]⊘[/yellow] Skipped {skipped_count} file(s)")
     if removed_count > 0:
         console.print(f"[yellow]🗑[/yellow] Removed {removed_count} source file(s)")
 
@@ -198,6 +278,103 @@ def info(file_path: Path) -> None:
 
         console.print(table)
 
+    except Exception as e:
+        console.print(f"[red]✗[/red] Error: {e}")
+        raise click.Abort()
+
+
+@cli.group()
+def covers() -> None:
+    """Cover art management for webMAN-MOD."""
+    pass
+
+
+@covers.command()
+@click.argument('path', type=str)
+@click.option('--database', type=click.Path(exists=True, path_type=Path), default=None,
+              help='Path to ROM database directory (myrient TSV files)')
+@click.option('--dry-run', is_flag=True, default=False,
+              help='Preview actions without making changes')
+@click.option('--organize/--no-organize', default=True,
+              help='Organize PS1/PS2 games into folders')
+@click.option('--skip-existing/--force-all', default=True,
+              help='Skip games that already have covers')
+def sync(
+    path: str,
+    database: Path | None,
+    dry_run: bool,
+    organize: bool,
+    skip_existing: bool
+) -> None:
+    """
+    Sync cover art for PS1/PS2/ROM games.
+
+    PATH can be a local directory or FTP URL:
+      /path/to/games
+      ftp://user:pass@192.168.0.16/dev_hdd0
+
+    Expected structure:
+      PATH/PSXISO/  - PS1 games
+      PATH/PS2ISO/  - PS2 games
+      PATH/ROMS/    - Retro ROMs (organized by emulator)
+    """
+    from ps3toolbox.covers.sync import sync_covers_command
+
+    try:
+        asyncio.run(sync_covers_command(
+            path=path,
+            database_path=database,
+            dry_run=dry_run,
+            organize=organize,
+            skip_existing=skip_existing,
+        ))
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Operation cancelled by user[/yellow]")
+    except Exception as e:
+        console.print(f"[red]✗[/red] Error: {e}")
+        raise click.Abort()
+
+
+@cli.command()
+@click.argument('path', type=click.Path(exists=True, path_type=Path))
+@click.option('--dry-run', is_flag=True, default=False,
+              help='Preview actions without making changes')
+@click.option('--any-image', is_flag=True, default=False,
+              help='Use any image found in folder (skip heuristics)')
+def organize(
+    path: Path,
+    dry_run: bool,
+    any_image: bool
+) -> None:
+    """
+    Organize PS1/PS2 games into folders with covers.
+
+    Recursively scans PATH for game files (.bin, .cue, .iso) and organizes
+    them into individual game folders. Automatically finds and copies cover
+    images using intelligent heuristics.
+
+    Similar to fix_psx_covers.py but with folder organization.
+
+    Examples:
+      # Preview organization (safe, no changes)
+      ps3toolbox organize /path/to/PSXISO --dry-run
+
+      # Actually organize games
+      ps3toolbox organize /path/to/PSXISO
+
+      # Use any image found (skip smart matching)
+      ps3toolbox organize /path/to/PSXISO --any-image
+    """
+    from ps3toolbox.games.organize_cli import organize_games_command
+
+    try:
+        asyncio.run(organize_games_command(
+            path=str(path),
+            dry_run=dry_run,
+            any_image=any_image,
+        ))
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Operation cancelled by user[/yellow]")
     except Exception as e:
         console.print(f"[red]✗[/red] Error: {e}")
         raise click.Abort()

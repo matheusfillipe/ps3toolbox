@@ -29,10 +29,11 @@ def build_limg_header(iso_path: Path, iso_size: int) -> bytes:
             f.seek(0x8000 + 0x54)
         else:
             f.seek(0x9318 + 0x54)
-        num_sectors = f.read(4)
+        num_sectors_bytes = f.read(4)
+        num_sectors = struct.unpack('<I', num_sectors_bytes)[0]
 
     struct.pack_into('>I', header, 0x04, 0x01 if is_dvd else 0x02)
-    header[0x08:0x0C] = num_sectors
+    struct.pack_into('>I', header, 0x08, num_sectors)
 
     if is_dvd:
         struct.pack_into('>I', header, 0x0C, 0x00000800)
