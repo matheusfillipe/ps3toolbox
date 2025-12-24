@@ -32,11 +32,16 @@ ROM_PLATFORMS = {
     "gbc": "GBC",
     "gba": "GBA",
     "genesis": "Genesis",
+    "gen": "Genesis",
     "megadrive": "Genesis",
     "sms": "SMS",
     "n64": "N64",
     "atari2600": "Atari2600",
+    "atari5200": "Atari5200",
     "atari7800": "Atari7800",
+    "lynx": "Lynx",
+    "mame": "MAME",
+    "mameplus": "MAME",
 }
 
 PS1_EXTENSIONS = {".bin", ".cue", ".img", ".pbp"}
@@ -50,11 +55,16 @@ ROM_EXTENSIONS = {
     ".gba",
     ".gen",
     ".md",
+    ".bin",
     ".sms",
     ".z64",
     ".n64",
+    ".v64",
     ".a26",
+    ".a52",
     ".a78",
+    ".lnx",
+    ".zip",
 }
 
 COVER_EXTENSIONS = {".png", ".jpg", ".PNG", ".JPG"}
@@ -89,6 +99,7 @@ class GameScanner:
                 if folder_name_upper in folder_names:
                     platform_paths[platform] = item.path
                     break
+
 
         # Scan each platform
         if "PS1" in platform_paths:

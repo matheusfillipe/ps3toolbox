@@ -47,6 +47,7 @@ class CoverSync:
         organizer: GameOrganizer,
         console: Console,
         dry_run: bool = False,
+        full_output: bool = False,
     ):
         self.fs = fs
         self.resolver = resolver
@@ -54,6 +55,7 @@ class CoverSync:
         self.organizer = organizer
         self.console = console
         self.dry_run = dry_run
+        self.full_output = full_output
         self.scanner = GameScanner(fs)
 
     async def sync_covers(
@@ -61,6 +63,8 @@ class CoverSync:
         root_path: str,
         organize: bool = True,
         skip_existing: bool = True,
+        platform_filter: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> SyncStats:
         """
         Sync covers for all games in directory structure.
@@ -69,6 +73,8 @@ class CoverSync:
             root_path: Root path with PS3 structure (PSXISO, PS2ISO, ROMS)
             organize: Whether to organize games into folders
             skip_existing: Skip games that already have covers
+            platform_filter: Filter to specific platform (PS1, PS2, or ROMS)
+            limit: Limit to first N games (for testing)
 
         Returns:
             Statistics for the operation
@@ -77,30 +83,84 @@ class CoverSync:
         actions: list[SyncAction] = []
 
         # Phase 1: Scan for games
-        self.console.print(f"\n[cyan]Scanning {root_path}...[/cyan]")
+        filter_msg = f" ({platform_filter} only)" if platform_filter else ""
+        limit_msg = f" (limit: {limit})" if limit else ""
+        self.console.print(f"\n[cyan]Scanning {root_path}{filter_msg}{limit_msg}...[/cyan]")
 
+        # Collect all games first
+        games_to_process = []
         async for game in self.scanner.scan_root(root_path):
+            # Filter by platform if specified
+            if platform_filter:
+                # Map platform names
+                if platform_filter == 'PS1' and game.platform != 'PSX':
+                    continue
+                elif platform_filter == 'PS2' and game.platform != 'PS2':
+                    continue
+                elif platform_filter == 'ROMS' and game.platform in ('PSX', 'PS2'):
+                    continue
+
             stats.scanned += 1
 
             if game.has_cover and skip_existing:
                 stats.already_has_cover += 1
                 continue
 
-            # Resolve serial
-            serial_result = await self.resolver.resolve(
-                game.name,
-                game.platform,
-                use_fuzzy=True,
-            )
+            games_to_process.append(game)
 
-            serial = serial_result[0] if serial_result else None
-            method = serial_result[1] if serial_result else 'none'
+            # Apply limit if specified
+            if limit and len(games_to_process) >= limit:
+                break
+
+        # Resolve serials in parallel
+        self.console.print(f"[dim]Resolving serials for {len(games_to_process)} games...[/dim]")
+        serial_tasks = [
+            self.resolver.resolve(game.name, game.platform, use_fuzzy=True)
+            for game in games_to_process
+        ]
+        serial_results = await asyncio.gather(*serial_tasks, return_exceptions=True)
+
+        # In dry-run mode, search for covers in parallel
+        cover_results = []
+        if self.dry_run and games_to_process:
+            self.console.print(f"[dim]Searching for covers (this may take a minute)...[/dim]")
+            cover_tasks = []
+            for game, serial_result in zip(games_to_process, serial_results):
+                if isinstance(serial_result, Exception):
+                    serial = None
+                else:
+                    serial = serial_result[0] if serial_result else None
+                cover_tasks.append(
+                    self.downloader.download_cover(game.platform, serial, game.name)
+                )
+            cover_results = await asyncio.gather(*cover_tasks, return_exceptions=True)
+
+        # Build actions
+        for i, game in enumerate(games_to_process):
+            serial_result = serial_results[i]
+            if isinstance(serial_result, Exception):
+                serial = None
+                method = 'error'
+            else:
+                serial = serial_result[0] if serial_result else None
+                method = serial_result[1] if serial_result else 'none'
+
+            # Get cover info
+            cover_source = None
+            cover_url = None
+            if self.dry_run and cover_results:
+                cover_result = cover_results[i]
+                if not isinstance(cover_result, Exception) and cover_result:
+                    cover_source = cover_result[1]  # Source name
+                    cover_url = cover_result[2]  # URL
 
             # Plan action
             action = SyncAction(
                 game=game,
                 action_type='download' if not game.has_cover else 'skip',
-                details=f"Serial: {serial or 'NOT FOUND'} (method: {method})",
+                details=f"Serial: {serial or 'NOT FOUND'} (method: {method})" +
+                       (f"\n  URL: {cover_url}" if cover_url else ""),
+                cover_source=cover_url if cover_url else cover_source,
             )
 
             actions.append(action)
@@ -111,7 +171,10 @@ class CoverSync:
             return stats
 
         # Phase 3: Download covers in parallel
-        self.console.print(f"\n[cyan]Downloading covers...[/cyan]")
+        if not actions:
+            return stats
+
+        self.console.print(f"\n[cyan]Downloading covers for {len(actions)} games...[/cyan]")
 
         download_tasks = []
         for action in actions:
@@ -134,17 +197,29 @@ class CoverSync:
         batch_size = 10
         for i in range(0, len(download_tasks), batch_size):
             batch = download_tasks[i:i + batch_size]
+            batch_num = i // batch_size + 1
+            total_batches = (len(download_tasks) + batch_size - 1) // batch_size
 
-            results = await self.downloader.download_batch([
-                (platform, serial, name)
-                for _, platform, serial, name in batch
-            ])
+            self.console.print(f"[dim]  Batch {batch_num}/{total_batches}: downloading {len(batch)} covers...[/dim]")
 
-            for (action, _, _, _), result in zip(batch, results):
-                if result:
-                    action.cover_data, action.cover_source = result
-                    stats.downloaded += 1
-                else:
+            try:
+                results = await self.downloader.download_batch([
+                    (platform, serial, name)
+                    for _, platform, serial, name in batch
+                ])
+
+                for (action, _, _, _), result in zip(batch, results):
+                    if result:
+                        action.cover_data = result[0]  # bytes
+                        action.cover_source = result[2]  # URL
+                        stats.downloaded += 1
+                        self.console.print(f"[dim]    ✓ {action.game.name}[/dim]")
+                    else:
+                        stats.failed += 1
+                        self.console.print(f"[dim]    ✗ {action.game.name}[/dim]")
+            except Exception as e:
+                self.console.print(f"[red]  Batch {batch_num} failed: {e}[/red]")
+                for action, _, _, _ in batch:
                     stats.failed += 1
 
         # Phase 4: Organize and save covers
@@ -172,25 +247,39 @@ class CoverSync:
                         stats.organized += 1
 
         # Phase 5: Save covers
-        self.console.print(f"\n[cyan]Saving covers...[/cyan]")
+        covers_to_save = [a for a in actions if a.cover_data]
+        if covers_to_save:
+            self.console.print(f"\n[cyan]Saving {len(covers_to_save)} covers...[/cyan]")
 
-        for action in actions:
-            if action.cover_data:
-                # Determine target path
-                target_folder = action.game.folder
+            saved = 0
+            failed = 0
+            for action in covers_to_save:
+                try:
+                    # Determine target path
+                    target_folder = action.game.folder
 
-                # If organized, use new folder location
-                if action.organize_actions:
-                    for org_action in action.organize_actions:
-                        if org_action.action_type == 'mkdir':
-                            target_folder = org_action.dst
-                            break
+                    # If organized, use new folder location
+                    if action.organize_actions:
+                        for org_action in action.organize_actions:
+                            if org_action.action_type == 'mkdir':
+                                target_folder = org_action.dst
+                                break
 
-                cover_filename = f"{action.game.name}.PNG"
-                cover_path = self.fs.join_path(target_folder, cover_filename)
+                    cover_filename = f"{action.game.name}.PNG"
+                    cover_path = self.fs.join_path(target_folder, cover_filename)
 
-                # Save cover
-                await self.fs.write_bytes(cover_path, action.cover_data)
+                    # Save cover
+                    self.console.print(f"[dim]  Attempting: {cover_path}[/dim]")
+                    await self.fs.write_bytes(cover_path, action.cover_data)
+                    saved += 1
+                    self.console.print(f"[dim]  ✓ Saved {cover_filename}[/dim]")
+                except Exception as e:
+                    failed += 1
+                    self.console.print(f"[red]  ✗ Failed to save {action.game.name}[/red]")
+                    self.console.print(f"[red]     Path: {cover_path}[/red]")
+                    self.console.print(f"[red]     Error: {e}[/red]")
+
+            self.console.print(f"[green]Saved {saved} covers ({failed} failed)[/green]")
 
         # Final summary
         self._display_summary(stats)
@@ -199,13 +288,16 @@ class CoverSync:
 
     def _display_plan(self, actions: list[SyncAction], stats: SyncStats):
         """Display dry-run plan in a formatted table."""
-        table = Table(title="Cover Sync Plan (DRY RUN)")
-        table.add_column("Game", style="cyan")
-        table.add_column("Platform", style="magenta")
-        table.add_column("Action", style="yellow")
-        table.add_column("Details", style="green")
+        table = Table(title="Cover Sync Plan (DRY RUN)", expand=True)
+        table.add_column("Game", style="cyan", no_wrap=False, max_width=30)
+        table.add_column("Platform", style="magenta", max_width=10)
+        table.add_column("Action", style="yellow", max_width=10)
+        table.add_column("Details", style="green", no_wrap=False)
 
-        for action in actions[:50]:  # Limit display to first 50
+        # Show all games if full_output is enabled, otherwise limit to 50
+        display_limit = len(actions) if self.full_output else 50
+
+        for action in actions[:display_limit]:
             table.add_row(
                 action.game.name,
                 action.game.platform,
@@ -213,10 +305,22 @@ class CoverSync:
                 action.details,
             )
 
-        if len(actions) > 50:
-            table.add_row("...", "...", "...", f"+ {len(actions) - 50} more games")
+        if len(actions) > display_limit:
+            table.add_row("...", "...", "...", f"+ {len(actions) - display_limit} more games")
 
         self.console.print(table)
+
+        # Show URLs for found covers
+        found_covers = [a for a in actions[:display_limit] if a.cover_source]
+        if self.dry_run and found_covers:
+            self.console.print(f"\n[green]✓ Found {len(found_covers)}/{len(actions)} covers[/green]")
+            if len(found_covers) <= 20:  # Only show URLs for first 20
+                self.console.print("\n[cyan]Cover URLs:[/cyan]")
+                for action in found_covers:
+                    self.console.print(f"  [dim]{action.game.name}:[/dim]")
+                    self.console.print(f"    {action.cover_source}")
+        elif self.dry_run and actions:
+            self.console.print(f"\n[yellow]⚠ No covers found (0/{len(actions)})[/yellow]")
 
     def _display_summary(self, stats: SyncStats):
         """Display operation summary."""
@@ -240,6 +344,9 @@ async def sync_covers_command(
     dry_run: bool,
     organize: bool,
     skip_existing: bool,
+    platform_filter: Optional[str] = None,
+    full_output: bool = False,
+    limit: Optional[int] = None,
 ):
     """Main entry point for cover sync command."""
     console = Console()
@@ -276,12 +383,15 @@ async def sync_covers_command(
                 organizer=organizer,
                 console=console,
                 dry_run=dry_run,
+                full_output=full_output,
             )
 
             await sync.sync_covers(
                 root_path=path,
                 organize=organize,
                 skip_existing=skip_existing,
+                platform_filter=platform_filter,
+                limit=limit,
             )
 
         finally:

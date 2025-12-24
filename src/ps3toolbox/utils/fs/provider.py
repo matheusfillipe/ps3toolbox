@@ -171,11 +171,19 @@ class FTPFilesystem(FilesystemProvider):
         self.dry_run = dry_run
         self._client: FTP | None = None
 
+    def _normalize_path(self, path: str) -> str:
+        """Strip FTP URL prefix if present, return just the path part."""
+        if path.startswith('ftp://'):
+            parsed = urlparse(path)
+            return parsed.path or '/'
+        return path
+
     async def connect(self):
         """Connect to FTP server."""
         if self._client is None:
             def _connect():
                 ftp = FTP()
+                ftp.encoding = 'latin-1'  # PS3 FTP servers use Latin-1 encoding
                 ftp.connect(self.host, self.port, timeout=30)
                 ftp.login(self.user, self.password)
                 # Set to binary mode for file transfers
@@ -205,6 +213,7 @@ class FTPFilesystem(FilesystemProvider):
 
     async def exists(self, path: str) -> bool:
         await self.connect()
+        path = self._normalize_path(path)
 
         def _exists():
             try:
@@ -221,6 +230,7 @@ class FTPFilesystem(FilesystemProvider):
 
     async def is_dir(self, path: str) -> bool:
         await self.connect()
+        path = self._normalize_path(path)
 
         def _is_dir():
             try:
@@ -235,11 +245,12 @@ class FTPFilesystem(FilesystemProvider):
 
     async def list_dir(self, path: str) -> AsyncIterator[FileInfo]:
         await self.connect()
+        path = self._normalize_path(path)
 
         def _list_dir():
             items = []
+            # Try MLSD first (modern listing)
             try:
-                # Parse MLSD (modern listing)
                 for name, facts in self._client.mlsd(path):
                     if name in ('.', '..'):
                         continue
@@ -251,30 +262,41 @@ class FTPFilesystem(FilesystemProvider):
                         size=int(facts.get('size', 0)),
                         is_dir=facts.get('type') == 'dir',
                     ))
+                return items
             except Exception:
-                # Fall back to NLST + SIZE for older servers
+                # MLSD not supported, fall back to NLST
+                pass
+
+            # Fall back to NLST + SIZE for older servers
+            listings = self._client.nlst(path)
+
+            for listing in listings:
+                if listing in ('.', '..'):
+                    continue
+
+                # NLST might return full paths or just names
+                # If it's a full path, extract the basename
+                if '/' in listing:
+                    full_path = listing
+                    name = PurePosixPath(listing).name
+                else:
+                    name = listing
+                    full_path = str(PurePosixPath(path) / name)
+
                 try:
-                    names = self._client.nlst(path)
-                    for name in names:
-                        if name in ('.', '..'):
-                            continue
-
-                        full_path = str(PurePosixPath(path) / name)
-                        try:
-                            size = self._client.size(full_path)
-                            is_dir = False
-                        except Exception:
-                            size = 0
-                            is_dir = True
-
-                        items.append(FileInfo(
-                            path=full_path,
-                            name=name,
-                            size=size or 0,
-                            is_dir=is_dir,
-                        ))
+                    size = self._client.size(full_path)
+                    is_dir = False
                 except Exception:
-                    pass
+                    # SIZE failed, assume it's a directory
+                    size = 0
+                    is_dir = True
+
+                items.append(FileInfo(
+                    path=full_path,
+                    name=name,
+                    size=size or 0,
+                    is_dir=is_dir,
+                ))
 
             return items
 
@@ -284,6 +306,7 @@ class FTPFilesystem(FilesystemProvider):
 
     async def read_bytes(self, path: str, start: int = 0, length: int = -1) -> bytes:
         await self.connect()
+        path = self._normalize_path(path)
 
         def _read():
             buffer = io.BytesIO()
@@ -304,6 +327,7 @@ class FTPFilesystem(FilesystemProvider):
             return
 
         await self.connect()
+        path = self._normalize_path(path)
 
         def _write():
             buffer = io.BytesIO(data)
@@ -324,6 +348,7 @@ class FTPFilesystem(FilesystemProvider):
             return
 
         await self.connect()
+        path = self._normalize_path(path)
 
         def _mkdir():
             try:
@@ -338,6 +363,8 @@ class FTPFilesystem(FilesystemProvider):
             return
 
         await self.connect()
+        src = self._normalize_path(src)
+        dst = self._normalize_path(dst)
 
         def _rename():
             self._client.rename(src, dst)
