@@ -4,7 +4,7 @@ import asyncio
 import io
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from ftplib import FTP
+from ftplib import FTP, all_errors
 from pathlib import Path, PurePosixPath
 from typing import AsyncIterator
 from urllib.parse import urlparse
@@ -180,6 +180,16 @@ class FTPFilesystem(FilesystemProvider):
 
     async def connect(self):
         """Connect to FTP server."""
+        if self._client:
+            try:
+                await asyncio.to_thread(self._client.voidcmd, 'NOOP')
+            except Exception:
+                try:
+                    self._client.close()
+                except Exception:
+                    pass
+                self._client = None
+
         if self._client is None:
             def _connect():
                 ftp = FTP()
@@ -198,7 +208,7 @@ class FTPFilesystem(FilesystemProvider):
             def _disconnect():
                 try:
                     self._client.quit()
-                except Exception:
+                except all_errors:
                     pass  # Ignore errors during disconnect
 
             await asyncio.to_thread(_disconnect)
@@ -331,7 +341,31 @@ class FTPFilesystem(FilesystemProvider):
 
         def _write():
             buffer = io.BytesIO(data)
-            self._client.storbinary(f'STOR {path}', buffer)
+            
+            # Some servers (like PS3 dev_ntfs0) require CWD before STOR
+            # Split path into directory and filename
+            p = PurePosixPath(path)
+            directory = str(p.parent)
+            filename = p.name
+            
+            try:
+                current_pwd = self._client.pwd()
+            except Exception:
+                current_pwd = '/'
+
+            try:
+                # Try to change to the target directory
+                self._client.cwd(directory)
+                self._client.storbinary(f'STOR {filename}', buffer)
+            except all_errors:
+                # If CWD failed, try full path as fallback
+                buffer.seek(0)
+                self._client.storbinary(f'STOR {path}', buffer)
+            finally:
+                try:
+                    self._client.cwd(current_pwd)
+                except all_errors:
+                    pass
 
         await asyncio.to_thread(_write)
 
@@ -353,8 +387,23 @@ class FTPFilesystem(FilesystemProvider):
         def _mkdir():
             try:
                 self._client.mkd(path)
-            except Exception:
-                pass  # Ignore if already exists
+            except all_errors:
+                # Try CWD approach if full path fails
+                try:
+                    p = PurePosixPath(path)
+                    directory = str(p.parent)
+                    name = p.name
+                    
+                    try:
+                        current_pwd = self._client.pwd()
+                    except all_errors:
+                        current_pwd = '/'
+                        
+                    self._client.cwd(directory)
+                    self._client.mkd(name)
+                    self._client.cwd(current_pwd)
+                except all_errors:
+                    pass  # Ignore if already exists or really fails
 
         await asyncio.to_thread(_mkdir)
 
