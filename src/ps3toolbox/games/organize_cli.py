@@ -1,13 +1,13 @@
 """PS1/PS2 game organizer - merge .bin/.cue files into folders with covers."""
 
-import asyncio
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.progress import Progress
+from rich.progress import SpinnerColumn
+from rich.progress import TextColumn
 from rich.table import Table
 
 from ps3toolbox.utils.fs import LocalFilesystem
@@ -16,16 +16,18 @@ from ps3toolbox.utils.fs import LocalFilesystem
 @dataclass
 class GameGroup:
     """Group of files belonging to one game."""
+
     base_name: str
     game_files: list[str]
     folder: str
-    existing_cover: Optional[str] = None
-    chosen_cover: Optional[str] = None
+    existing_cover: str | None = None
+    chosen_cover: str | None = None
 
 
 @dataclass
 class OrganizeStats:
     """Statistics for organize operation."""
+
     games_found: int = 0
     already_organized: int = 0
     folders_created: int = 0
@@ -34,9 +36,9 @@ class OrganizeStats:
     covers_renamed: int = 0
 
 
-GAME_EXTS = {'.iso', '.bin', '.img', '.pbp', '.cue', '.ccd', '.sub'}
-COVER_EXTS = {'.jpg', '.png', '.PNG', '.JPG'}
-DEFAULT_COVER_EXTS = ['.PNG', '.JPG', '.png', '.jpg']
+GAME_EXTS = {".iso", ".bin", ".img", ".pbp", ".cue", ".ccd", ".sub"}
+COVER_EXTS = {".jpg", ".png", ".PNG", ".JPG"}
+DEFAULT_COVER_EXTS = [".PNG", ".JPG", ".png", ".jpg"]
 
 
 class GameOrganizer:
@@ -60,7 +62,7 @@ class GameOrganizer:
 
         return sorted(images)
 
-    async def has_exact_cover(self, game_path: str) -> Optional[str]:
+    async def has_exact_cover(self, game_path: str) -> str | None:
         """Check if game has exact matching cover."""
         stem = self.fs.stem(game_path)
         folder = self.fs.dirname(game_path)
@@ -76,7 +78,7 @@ class GameOrganizer:
         self,
         game_path: str,
         base_name: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Choose best cover image for game using heuristics.
 
@@ -152,7 +154,7 @@ class GameOrganizer:
         await _scan_recursive(root_path)
 
         # Group files by base name and folder
-        grouped = defaultdict(lambda: defaultdict(list))
+        grouped: defaultdict[str, defaultdict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
 
         for file_path in all_files:
             folder = self.fs.dirname(file_path)
@@ -172,12 +174,14 @@ class GameOrganizer:
                         existing_cover = cover
                         break
 
-                game_groups.append(GameGroup(
-                    base_name=stem,
-                    game_files=sorted(files),
-                    folder=folder,
-                    existing_cover=existing_cover,
-                ))
+                game_groups.append(
+                    GameGroup(
+                        base_name=stem,
+                        game_files=sorted(files),
+                        folder=folder,
+                        existing_cover=existing_cover,
+                    )
+                )
 
         return game_groups
 
@@ -185,14 +189,14 @@ class GameOrganizer:
         self,
         game: GameGroup,
         base_path: str,
-    ) -> tuple[list[str], Optional[str]]:
+    ) -> tuple[list[str], str | None]:
         """
         Organize a single game into its own folder.
 
         Returns:
             (list of actions performed, cover path if copied)
         """
-        actions = []
+        actions: list[str] = []
 
         # Determine target folder name
         # Use base_name, but clean it up
@@ -242,10 +246,10 @@ class GameOrganizer:
                 # Copy cover to target folder
                 cover_ext = Path(chosen_cover).suffix
                 # Prefer uppercase extension
-                if cover_ext.lower() == '.png':
-                    cover_ext = '.PNG'
-                elif cover_ext.lower() == '.jpg':
-                    cover_ext = '.JPG'
+                if cover_ext.lower() == ".png":
+                    cover_ext = ".PNG"
+                elif cover_ext.lower() == ".jpg":
+                    cover_ext = ".JPG"
 
                 cover_dst = self.fs.join_path(target_folder, game.base_name + cover_ext)
 
@@ -291,13 +295,13 @@ class GameOrganizer:
 
             # Update stats
             for action in actions:
-                if action.startswith('CREATE'):
+                if action.startswith("CREATE"):
                     stats.folders_created += 1
-                elif action.startswith('MOVE') and 'COVER' not in action:
+                elif action.startswith("MOVE") and "COVER" not in action:
                     stats.files_moved += 1
-                elif action.startswith('MOVE COVER'):
+                elif action.startswith("MOVE COVER"):
                     stats.covers_renamed += 1
-                elif action.startswith('COPY COVER'):
+                elif action.startswith("COPY COVER"):
                     stats.covers_copied += 1
 
         return stats
@@ -383,7 +387,7 @@ async def organize_games_command(
                         sample_game.base_name,
                     )
                     if chosen:
-                        cover_ext = '.PNG' if chosen.endswith(('.png', '.PNG')) else '.JPG'
+                        cover_ext = ".PNG" if chosen.endswith((".png", ".PNG")) else ".JPG"
                         cover_dst = fs.join_path(target, sample_game.base_name + cover_ext)
                         console.print(f"  COPY COVER: {chosen}")
                         console.print(f"    → {cover_dst}")
@@ -415,13 +419,13 @@ async def organize_games_command(
             actions, cover_copied = await organizer.organize_game(game, path)
 
             for action in actions:
-                if action.startswith('CREATE'):
+                if action.startswith("CREATE"):
                     stats.folders_created += 1
-                elif action.startswith('MOVE') and 'COVER' not in action:
+                elif action.startswith("MOVE") and "COVER" not in action:
                     stats.files_moved += 1
-                elif action.startswith('MOVE COVER'):
+                elif action.startswith("MOVE COVER"):
                     stats.covers_renamed += 1
-                elif action.startswith('COPY COVER'):
+                elif action.startswith("COPY COVER"):
                     stats.covers_copied += 1
 
             progress.advance(task)

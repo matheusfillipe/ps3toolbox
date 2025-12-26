@@ -1,13 +1,16 @@
 """PS2 .BIN.ENC decryption to ISO format."""
 
-import struct
 from pathlib import Path
-from ps3toolbox.core.keys import (
-    SEGMENT_SIZE, NUM_CHILD_SEGMENTS,
-    PS2_PLACEHOLDER_KLIC, get_base_keys
-)
-from ps3toolbox.core.crypto import derive_keys, aes128_cbc_decrypt
-from ps3toolbox.ps2.header import parse_ps2_header, verify_header
+
+from ps3toolbox.core.crypto import aes128_cbc_decrypt
+from ps3toolbox.core.crypto import derive_keys
+from ps3toolbox.core.keys import NUM_CHILD_SEGMENTS
+from ps3toolbox.core.keys import PS2_PLACEHOLDER_KLIC
+from ps3toolbox.core.keys import SEGMENT_SIZE
+from ps3toolbox.core.keys import get_base_keys
+from ps3toolbox.ps2.header import PS2Metadata
+from ps3toolbox.ps2.header import parse_ps2_header
+from ps3toolbox.ps2.header import verify_header
 from ps3toolbox.utils.errors import CorruptedFileError
 from ps3toolbox.utils.progress import ProgressCallback
 
@@ -15,19 +18,19 @@ from ps3toolbox.utils.progress import ProgressCallback
 def decrypt_ps2_iso(
     encrypted_path: Path,
     output_path: Path,
-    mode: str = 'cex',
+    mode: str = "cex",
     klicensee: bytes | None = None,
-    progress_callback: ProgressCallback | None = None
+    progress_callback: ProgressCallback | None = None,
 ) -> None:
     """Decrypt .BIN.ENC to ISO format."""
-    with open(encrypted_path, 'rb') as f:
+    with open(encrypted_path, "rb") as f:
         header = f.read(0x100)
 
     if not verify_header(header):
         raise CorruptedFileError(f"Invalid or corrupted header in {encrypted_path}")
 
     metadata = parse_ps2_header(header)
-    data_size = metadata['iso_size']
+    data_size = metadata["iso_size"]
 
     klic = klicensee or PS2_PLACEHOLDER_KLIC
     base_data_key, base_meta_key = get_base_keys(mode)
@@ -35,7 +38,7 @@ def decrypt_ps2_iso(
 
     zero_iv = bytes(16)
 
-    with open(encrypted_path, 'rb') as in_f, open(output_path, 'wb') as out_f:
+    with open(encrypted_path, "rb") as in_f, open(output_path, "wb") as out_f:
         in_f.seek(SEGMENT_SIZE)
 
         remaining = data_size
@@ -72,9 +75,9 @@ def decrypt_ps2_iso(
                 progress_callback(bytes_processed, data_size)
 
 
-def extract_metadata(encrypted_path: Path) -> dict[str, int | str | bytes]:
+def extract_metadata(encrypted_path: Path) -> PS2Metadata:
     """Extract metadata from encrypted PS2 Classic file."""
-    with open(encrypted_path, 'rb') as f:
+    with open(encrypted_path, "rb") as f:
         header = f.read(0x100)
 
     if not verify_header(header):

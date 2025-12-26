@@ -2,11 +2,14 @@
 
 import asyncio
 import io
-from abc import ABC, abstractmethod
+from abc import ABC
+from abc import abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from ftplib import FTP, all_errors
-from pathlib import Path, PurePosixPath
-from typing import AsyncIterator
+from ftplib import FTP
+from ftplib import all_errors
+from pathlib import Path
+from pathlib import PurePosixPath
 from urllib.parse import urlparse
 
 import aiofiles
@@ -15,6 +18,7 @@ import aiofiles
 @dataclass
 class FileInfo:
     """File information that works for both local and FTP."""
+
     path: str
     name: str
     size: int
@@ -35,7 +39,7 @@ class FilesystemProvider(ABC):
         pass
 
     @abstractmethod
-    async def list_dir(self, path: str) -> AsyncIterator[FileInfo]:
+    def list_dir(self, path: str) -> AsyncIterator[FileInfo]:
         """List directory contents."""
         pass
 
@@ -111,7 +115,7 @@ class LocalFilesystem(FilesystemProvider):
             )
 
     async def read_bytes(self, path: str, start: int = 0, length: int = -1) -> bytes:
-        async with aiofiles.open(path, 'rb') as f:
+        async with aiofiles.open(path, "rb") as f:
             if start > 0:
                 await f.seek(start)
             if length > 0:
@@ -122,7 +126,7 @@ class LocalFilesystem(FilesystemProvider):
         if self.dry_run:
             return
 
-        async with aiofiles.open(path, 'wb') as f:
+        async with aiofiles.open(path, "wb") as f:
             await f.write(data)
 
     async def copy_file(self, src: str, dst: str) -> None:
@@ -130,6 +134,7 @@ class LocalFilesystem(FilesystemProvider):
             return
 
         import shutil
+
         await asyncio.to_thread(shutil.copy2, src, dst)
 
     async def mkdir(self, path: str) -> None:
@@ -163,26 +168,26 @@ class FTPFilesystem(FilesystemProvider):
     Uses standard ftplib for maximum compatibility with PS3/older servers.
     """
 
-    def __init__(self, host: str, port: int = 21, user: str = '', password: str = '', dry_run: bool = False):
+    def __init__(self, host: str, port: int = 21, user: str = "", password: str = "", dry_run: bool = False):
         self.host = host
         self.port = port
-        self.user = user or 'anonymous'
-        self.password = password or 'anonymous@'
+        self.user = user or "anonymous"
+        self.password = password or "anonymous@"
         self.dry_run = dry_run
         self._client: FTP | None = None
 
     def _normalize_path(self, path: str) -> str:
         """Strip FTP URL prefix if present, return just the path part."""
-        if path.startswith('ftp://'):
+        if path.startswith("ftp://"):
             parsed = urlparse(path)
-            return parsed.path or '/'
+            return parsed.path or "/"
         return path
 
     async def connect(self):
         """Connect to FTP server."""
         if self._client:
             try:
-                await asyncio.to_thread(self._client.voidcmd, 'NOOP')
+                await asyncio.to_thread(self._client.voidcmd, "NOOP")
             except Exception:
                 try:
                     self._client.close()
@@ -191,13 +196,14 @@ class FTPFilesystem(FilesystemProvider):
                 self._client = None
 
         if self._client is None:
+
             def _connect():
                 ftp = FTP()
-                ftp.encoding = 'latin-1'  # PS3 FTP servers use Latin-1 encoding
+                ftp.encoding = "latin-1"  # PS3 FTP servers use Latin-1 encoding
                 ftp.connect(self.host, self.port, timeout=30)
                 ftp.login(self.user, self.password)
                 # Set to binary mode for file transfers
-                ftp.voidcmd('TYPE I')
+                ftp.voidcmd("TYPE I")
                 return ftp
 
             self._client = await asyncio.to_thread(_connect)
@@ -205,6 +211,7 @@ class FTPFilesystem(FilesystemProvider):
     async def disconnect(self):
         """Disconnect from FTP server."""
         if self._client:
+
             def _disconnect():
                 try:
                     self._client.quit()
@@ -262,16 +269,18 @@ class FTPFilesystem(FilesystemProvider):
             # Try MLSD first (modern listing)
             try:
                 for name, facts in self._client.mlsd(path):
-                    if name in ('.', '..'):
+                    if name in (".", ".."):
                         continue
 
                     full_path = str(PurePosixPath(path) / name)
-                    items.append(FileInfo(
-                        path=full_path,
-                        name=name,
-                        size=int(facts.get('size', 0)),
-                        is_dir=facts.get('type') == 'dir',
-                    ))
+                    items.append(
+                        FileInfo(
+                            path=full_path,
+                            name=name,
+                            size=int(facts.get("size", 0)),
+                            is_dir=facts.get("type") == "dir",
+                        )
+                    )
                 return items
             except Exception:
                 # MLSD not supported, fall back to NLST
@@ -281,12 +290,12 @@ class FTPFilesystem(FilesystemProvider):
             listings = self._client.nlst(path)
 
             for listing in listings:
-                if listing in ('.', '..'):
+                if listing in (".", ".."):
                     continue
 
                 # NLST might return full paths or just names
                 # If it's a full path, extract the basename
-                if '/' in listing:
+                if "/" in listing:
                     full_path = listing
                     name = PurePosixPath(listing).name
                 else:
@@ -301,12 +310,14 @@ class FTPFilesystem(FilesystemProvider):
                     size = 0
                     is_dir = True
 
-                items.append(FileInfo(
-                    path=full_path,
-                    name=name,
-                    size=size or 0,
-                    is_dir=is_dir,
-                ))
+                items.append(
+                    FileInfo(
+                        path=full_path,
+                        name=name,
+                        size=size or 0,
+                        is_dir=is_dir,
+                    )
+                )
 
             return items
 
@@ -321,9 +332,9 @@ class FTPFilesystem(FilesystemProvider):
         def _read():
             buffer = io.BytesIO()
             if start > 0:
-                self._client.sendcmd(f'REST {start}')
+                self._client.sendcmd(f"REST {start}")
 
-            self._client.retrbinary(f'RETR {path}', buffer.write)
+            self._client.retrbinary(f"RETR {path}", buffer.write)
             data = buffer.getvalue()
 
             if length > 0:
@@ -341,26 +352,26 @@ class FTPFilesystem(FilesystemProvider):
 
         def _write():
             buffer = io.BytesIO(data)
-            
+
             # Some servers (like PS3 dev_ntfs0) require CWD before STOR
             # Split path into directory and filename
             p = PurePosixPath(path)
             directory = str(p.parent)
             filename = p.name
-            
+
             try:
                 current_pwd = self._client.pwd()
             except Exception:
-                current_pwd = '/'
+                current_pwd = "/"
 
             try:
                 # Try to change to the target directory
                 self._client.cwd(directory)
-                self._client.storbinary(f'STOR {filename}', buffer)
+                self._client.storbinary(f"STOR {filename}", buffer)
             except all_errors:
                 # If CWD failed, try full path as fallback
                 buffer.seek(0)
-                self._client.storbinary(f'STOR {path}', buffer)
+                self._client.storbinary(f"STOR {path}", buffer)
             finally:
                 try:
                     self._client.cwd(current_pwd)
@@ -393,12 +404,12 @@ class FTPFilesystem(FilesystemProvider):
                     p = PurePosixPath(path)
                     directory = str(p.parent)
                     name = p.name
-                    
+
                     try:
                         current_pwd = self._client.pwd()
                     except all_errors:
-                        current_pwd = '/'
-                        
+                        current_pwd = "/"
+
                     self._client.cwd(directory)
                     self._client.mkd(name)
                     self._client.cwd(current_pwd)
@@ -435,13 +446,13 @@ class FTPFilesystem(FilesystemProvider):
 
 def create_filesystem(path: str, dry_run: bool = False) -> FilesystemProvider:
     """Create appropriate filesystem provider based on path."""
-    if path.startswith('ftp://'):
+    if path.startswith("ftp://"):
         parsed = urlparse(path)
         return FTPFilesystem(
-            host=parsed.hostname or 'localhost',
+            host=parsed.hostname or "localhost",
             port=parsed.port or 21,
-            user=parsed.username or '',
-            password=parsed.password or '',
+            user=parsed.username or "",
+            password=parsed.password or "",
             dry_run=dry_run,
         )
     else:

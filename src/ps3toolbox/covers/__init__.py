@@ -2,6 +2,7 @@
 
 from .downloader import CoverDownloader
 
+
 __all__ = [
-    'CoverDownloader',
+    "CoverDownloader",
 ]

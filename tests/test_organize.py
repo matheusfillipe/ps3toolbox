@@ -1,11 +1,14 @@
 """Unit tests for game organization functionality."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock
 from pathlib import Path
+from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
 
-from ps3toolbox.games.organizer import GameOrganizer, OrganizeAction
-from ps3toolbox.games.organize_cli import GameOrganizer as CLIOrganizer, GameGroup
+import pytest
+
+from ps3toolbox.games.organize_cli import GameGroup
+from ps3toolbox.games.organize_cli import GameOrganizer as CLIOrganizer
+from ps3toolbox.games.organizer import GameOrganizer
 from ps3toolbox.utils.fs import LocalFilesystem
 
 

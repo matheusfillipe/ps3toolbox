@@ -1,16 +1,22 @@
 """PS2 ISO encryption to .BIN.ENC format."""
 
 import os
-import struct
 import shutil
+import struct
 import tempfile
 from pathlib import Path
-from ps3toolbox.core.keys import (
-    SEGMENT_SIZE, NUM_CHILD_SEGMENTS, META_ENTRY_SIZE,
-    PS2_PLACEHOLDER_KLIC, PS2_PLACEHOLDER_CID, get_base_keys
-)
-from ps3toolbox.core.crypto import derive_keys, aes128_cbc_encrypt, calculate_sha1
-from ps3toolbox.core.iso import validate_iso, pad_iso_to_boundary
+
+from ps3toolbox.core.crypto import aes128_cbc_encrypt
+from ps3toolbox.core.crypto import calculate_sha1
+from ps3toolbox.core.crypto import derive_keys
+from ps3toolbox.core.iso import pad_iso_to_boundary
+from ps3toolbox.core.iso import validate_iso
+from ps3toolbox.core.keys import META_ENTRY_SIZE
+from ps3toolbox.core.keys import NUM_CHILD_SEGMENTS
+from ps3toolbox.core.keys import PS2_PLACEHOLDER_CID
+from ps3toolbox.core.keys import PS2_PLACEHOLDER_KLIC
+from ps3toolbox.core.keys import SEGMENT_SIZE
+from ps3toolbox.core.keys import get_base_keys
 from ps3toolbox.ps2.header import build_ps2_header
 from ps3toolbox.ps2.limg import add_limg_header
 from ps3toolbox.utils.progress import ProgressCallback
@@ -19,10 +25,10 @@ from ps3toolbox.utils.progress import ProgressCallback
 def encrypt_ps2_iso(
     iso_path: Path,
     output_path: Path,
-    mode: str = 'cex',
+    mode: str = "cex",
     content_id: str | None = None,
     disc_num: int = 1,
-    progress_callback: ProgressCallback | None = None
+    progress_callback: ProgressCallback | None = None,
 ) -> None:
     """Encrypt PS2 ISO to .BIN.ENC format.
 
@@ -41,13 +47,12 @@ def encrypt_ps2_iso(
 
     temp_iso = None
     try:
-        temp_fd, temp_iso_path = tempfile.mkstemp(suffix='.iso', prefix='ps2enc_')
+        temp_fd, temp_iso_path = tempfile.mkstemp(suffix=".iso", prefix="ps2enc_")
         os.close(temp_fd)
         temp_iso = Path(temp_iso_path)
 
         shutil.copy2(iso_path, temp_iso)
 
-        original_size = temp_iso.stat().st_size
         pad_iso_to_boundary(temp_iso)
         final_size = add_limg_header(temp_iso)
 
@@ -60,7 +65,7 @@ def encrypt_ps2_iso(
 
         disc_num_encoded = (disc_num - 1) << 24
 
-        with open(output_path, 'wb') as out_f, open(temp_iso, 'rb') as in_f:
+        with open(output_path, "wb") as out_f, open(temp_iso, "rb") as in_f:
             out_f.write(header)
 
             segment_number = 0
@@ -73,7 +78,7 @@ def encrypt_ps2_iso(
 
                 actual_segments = (len(data_chunk) + SEGMENT_SIZE - 1) // SEGMENT_SIZE
                 if len(data_chunk) % SEGMENT_SIZE:
-                    data_chunk += b'\x00' * (actual_segments * SEGMENT_SIZE - len(data_chunk))
+                    data_chunk += b"\x00" * (actual_segments * SEGMENT_SIZE - len(data_chunk))
 
                 meta_buffer = bytearray(SEGMENT_SIZE)
                 encrypted_data = bytearray()
@@ -88,8 +93,8 @@ def encrypt_ps2_iso(
 
                     hash_value = calculate_sha1(encrypted_segment)
                     meta_offset = i * META_ENTRY_SIZE
-                    meta_buffer[meta_offset:meta_offset + 20] = hash_value
-                    struct.pack_into('>I', meta_buffer, meta_offset + 0x14, disc_num_encoded | segment_number)
+                    meta_buffer[meta_offset : meta_offset + 20] = hash_value
+                    struct.pack_into(">I", meta_buffer, meta_offset + 0x14, disc_num_encoded | segment_number)
                     segment_number += 1
 
                 encrypted_meta = aes128_cbc_encrypt(meta_key, zero_iv, bytes(meta_buffer))

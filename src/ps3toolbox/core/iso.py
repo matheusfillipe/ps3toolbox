@@ -1,22 +1,23 @@
 """ISO validation and preparation utilities."""
 
 from pathlib import Path
+
 from ps3toolbox.utils.errors import InvalidISOError
 
 
 def validate_iso(iso_path: Path) -> bool:
     """Validate PS2 ISO9660 format by checking signature."""
-    with open(iso_path, 'rb') as f:
+    with open(iso_path, "rb") as f:
         f.seek(0x8000)
         dvd_sig = f.read(6)
 
-        if dvd_sig == b'\x01CD001':
+        if dvd_sig == b"\x01CD001":
             return True
 
         f.seek(0x9318)
         cd_sig = f.read(6)
 
-        if cd_sig == b'\x01CD001':
+        if cd_sig == b"\x01CD001":
             return True
 
     raise InvalidISOError(f"Invalid ISO9660 signature in {iso_path}")
@@ -38,7 +39,7 @@ def pad_iso_to_boundary(iso_path: Path, boundary: int = 0x4000) -> int:
     padding_needed = (boundary - (current_size % boundary)) % boundary
 
     if padding_needed > 0:
-        with open(iso_path, 'ab') as f:
-            f.write(b'\x00' * padding_needed)
+        with open(iso_path, "ab") as f:
+            f.write(b"\x00" * padding_needed)
 
     return padding_needed

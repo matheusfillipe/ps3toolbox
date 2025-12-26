@@ -1,14 +1,18 @@
 """Game metadata, scanning, and organization."""
 
-from .metadata import SerialResolver, RomDatabase
-from .scanner import GameScanner, GameFile
-from .organizer import GameOrganizer, OrganizeAction
+from .metadata import RomDatabase
+from .metadata import SerialResolver
+from .organizer import GameOrganizer
+from .organizer import OrganizeAction
+from .scanner import GameFile
+from .scanner import GameScanner
+
 
 __all__ = [
-    'SerialResolver',
-    'RomDatabase',
-    'GameScanner',
-    'GameFile',
-    'GameOrganizer',
-    'OrganizeAction',
+    "SerialResolver",
+    "RomDatabase",
+    "GameScanner",
+    "GameFile",
+    "GameOrganizer",
+    "OrganizeAction",
 ]

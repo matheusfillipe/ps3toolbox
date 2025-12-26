@@ -3,35 +3,34 @@
 import csv
 import re
 from pathlib import Path
-from typing import Optional
 
 from thefuzz import fuzz
 
 
 SERIAL_PATTERNS = {
-    'parentheses': re.compile(r'\(([A-Z]{4}[-_]\d{3}[.\d]{2,3})\)'),
-    'brackets': re.compile(r'\[([A-Z]{4}[-_]\d{3}[.\d]{2,3})\]'),
-    'standalone': re.compile(r'\b([A-Z]{4}[-_]\d{3}[.\d]{2,3})\b'),
+    "parentheses": re.compile(r"\(([A-Z]{4}[-_]\d{3}[.\d]{2,3})\)"),
+    "brackets": re.compile(r"\[([A-Z]{4}[-_]\d{3}[.\d]{2,3})\]"),
+    "standalone": re.compile(r"\b([A-Z]{4}[-_]\d{3}[.\d]{2,3})\b"),
 }
 
 REGION_PATTERNS = {
-    'USA': re.compile(r'\((?:USA|US)\)', re.IGNORECASE),
-    'Europe': re.compile(r'\((?:Europe|EUR|PAL)\)', re.IGNORECASE),
-    'Japan': re.compile(r'\((?:Japan|JPN)\)', re.IGNORECASE),
-    'World': re.compile(r'\(World\)', re.IGNORECASE),
-    'Asia': re.compile(r'\((?:Asia|ASA)\)', re.IGNORECASE),
+    "USA": re.compile(r"\((?:USA|US)\)", re.IGNORECASE),
+    "Europe": re.compile(r"\((?:Europe|EUR|PAL)\)", re.IGNORECASE),
+    "Japan": re.compile(r"\((?:Japan|JPN)\)", re.IGNORECASE),
+    "World": re.compile(r"\(World\)", re.IGNORECASE),
+    "Asia": re.compile(r"\((?:Asia|ASA)\)", re.IGNORECASE),
 }
 
 
 def normalize_serial(serial: str) -> str:
     """Normalize serial to standard format: SLUS-12345."""
     serial = serial.upper()
-    serial = serial.replace('_', '-')
-    serial = serial.replace('.', '')
+    serial = serial.replace("_", "-")
+    serial = serial.replace(".", "")
     return serial
 
 
-def extract_serial_from_filename(filename: str) -> Optional[str]:
+def extract_serial_from_filename(filename: str) -> str | None:
     """
     Extract serial from filename using various patterns.
 
@@ -40,7 +39,7 @@ def extract_serial_from_filename(filename: str) -> Optional[str]:
         "Final Fantasy VII [SLUS_007.00].bin" → "SLUS-00700"
         "Crash Bandicoot (USA).bin" → None
     """
-    for pattern_name, pattern in SERIAL_PATTERNS.items():
+    for _pattern_name, pattern in SERIAL_PATTERNS.items():
         match = pattern.search(filename)
         if match:
             return normalize_serial(match.group(1))
@@ -48,7 +47,7 @@ def extract_serial_from_filename(filename: str) -> Optional[str]:
     return None
 
 
-def extract_region_from_filename(filename: str) -> Optional[str]:
+def extract_region_from_filename(filename: str) -> str | None:
     """
     Extract region from filename.
 
@@ -75,18 +74,18 @@ def clean_game_name(filename: str) -> str:
 
     # Remove serial patterns
     for pattern in SERIAL_PATTERNS.values():
-        name = pattern.sub('', name)
+        name = pattern.sub("", name)
 
     # Remove region patterns
-    name = re.sub(r'\([^)]*\)', '', name)
-    name = re.sub(r'\[[^\]]*\]', '', name)
+    name = re.sub(r"\([^)]*\)", "", name)
+    name = re.sub(r"\[[^\]]*\]", "", name)
 
     # Remove disc info
-    name = re.sub(r'\bDisc\s+\d+\b', '', name, flags=re.IGNORECASE)
-    name = re.sub(r'\bCD\s+\d+\b', '', name, flags=re.IGNORECASE)
+    name = re.sub(r"\bDisc\s+\d+\b", "", name, flags=re.IGNORECASE)
+    name = re.sub(r"\bCD\s+\d+\b", "", name, flags=re.IGNORECASE)
 
     # Clean whitespace
-    name = re.sub(r'\s+', ' ', name).strip().lower()
+    name = re.sub(r"\s+", " ", name).strip().lower()
 
     return name
 
@@ -99,32 +98,27 @@ class RomDatabase:
 
     def load_from_tsv(self, tsv_path: Path):
         """Load database from TSV file (myrient format)."""
-        with open(tsv_path, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(
-                f,
-                delimiter='\t',
-                fieldnames=['platform', 'region', 'name', 'url', 'size']
-            )
+        with open(tsv_path, encoding="utf-8") as f:
+            reader = csv.DictReader(f, delimiter="\t", fieldnames=["platform", "region", "name", "url", "size"])
 
             for row in reader:
                 # Extract serial from name if present
-                serial = extract_serial_from_filename(row['name'])
-                clean_name = clean_game_name(row['name'])
+                serial = extract_serial_from_filename(row["name"])
+                clean_name = clean_game_name(row["name"])
 
-                self.entries.append({
-                    'name': row['name'],
-                    'clean_name': clean_name,
-                    'region': row['region'],
-                    'serial': serial,
-                    'platform': row['platform'],
-                })
+                self.entries.append(
+                    {
+                        "name": row["name"],
+                        "clean_name": clean_name,
+                        "region": row["region"],
+                        "serial": serial,
+                        "platform": row["platform"],
+                    }
+                )
 
     def find_serial(
-        self,
-        game_name: str,
-        region: Optional[str] = None,
-        threshold: float = 75.0
-    ) -> Optional[tuple[str, float]]:
+        self, game_name: str, region: str | None = None, threshold: float = 75.0
+    ) -> tuple[str, float] | None:
         """
         Find serial by fuzzy matching game name.
 
@@ -141,20 +135,20 @@ class RomDatabase:
         # Filter by region if provided
         candidates = self.entries
         if region:
-            candidates = [e for e in candidates if e['region'] == region]
+            candidates = [e for e in candidates if e["region"] == region]
 
         best_match = None
         best_score = 0.0
 
         for entry in candidates:
-            if not entry['serial']:
+            if not entry["serial"]:
                 continue
 
             # Use fuzzy matching
-            score = fuzz.ratio(clean_name, entry['clean_name'])
+            score = fuzz.ratio(clean_name, entry["clean_name"])
 
             # Boost for exact substring matches
-            if clean_name in entry['clean_name'] or entry['clean_name'] in clean_name:
+            if clean_name in entry["clean_name"] or entry["clean_name"] in clean_name:
                 score += 10
 
             if score > best_score:
@@ -162,7 +156,7 @@ class RomDatabase:
                 best_match = entry
 
         if best_score >= threshold and best_match:
-            return best_match['serial'], best_score
+            return best_match["serial"], best_score
 
         return None
 
@@ -170,19 +164,14 @@ class RomDatabase:
 class SerialResolver:
     """Resolve game serials using multiple strategies."""
 
-    def __init__(self, databases: Optional[dict[str, RomDatabase]] = None):
+    def __init__(self, databases: dict[str, RomDatabase] | None = None):
         self.databases = databases or {}
 
     def add_database(self, platform: str, database: RomDatabase):
         """Add ROM database for a platform."""
         self.databases[platform] = database
 
-    async def resolve(
-        self,
-        filename: str,
-        platform: str,
-        use_fuzzy: bool = True
-    ) -> Optional[tuple[str, str]]:
+    async def resolve(self, filename: str, platform: str, use_fuzzy: bool = True) -> tuple[str, str] | None:
         """
         Resolve serial for a game file.
 
@@ -198,7 +187,7 @@ class SerialResolver:
         # Strategy 1: Extract from filename
         serial = extract_serial_from_filename(filename)
         if serial:
-            return serial, 'filename'
+            return serial, "filename"
 
         if not use_fuzzy or platform not in self.databases:
             return None
@@ -211,16 +200,16 @@ class SerialResolver:
         if region:
             result = db.find_serial(game_name, region=region, threshold=85.0)
             if result:
-                return result[0], 'fuzzy_exact'
+                return result[0], "fuzzy_exact"
 
         # Strategy 3: Fuzzy match any region (high threshold)
         result = db.find_serial(game_name, region=None, threshold=85.0)
         if result:
-            return result[0], 'fuzzy_region'
+            return result[0], "fuzzy_region"
 
         # Strategy 4: Fuzzy match any region (lower threshold)
         result = db.find_serial(game_name, region=None, threshold=75.0)
         if result:
-            return result[0], 'fuzzy'
+            return result[0], "fuzzy"
 
         return None

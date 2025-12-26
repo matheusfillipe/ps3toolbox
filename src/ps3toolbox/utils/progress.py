@@ -1,11 +1,14 @@
 """Progress reporting utilities."""
 
 from typing import Protocol
-from rich.progress import Progress, TaskID
+
+from rich.progress import Progress
+from rich.progress import TaskID
 
 
 class ProgressCallback(Protocol):
     """Protocol for progress callback functions."""
+
     def __call__(self, current: int, total: int) -> None: ...
 
 

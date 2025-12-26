@@ -2,20 +2,29 @@
 
 import asyncio
 import os
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import as_completed
 from pathlib import Path
 
 import click
 from rich.console import Console
-from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+from rich.progress import BarColumn
+from rich.progress import Progress
+from rich.progress import SpinnerColumn
+from rich.progress import TextColumn
+from rich.progress import TimeElapsedColumn
 from rich.table import Table
 
 from ps3toolbox.covers.sync import sync_covers_command
-from ps3toolbox.ps2.decrypt import decrypt_ps2_iso, extract_metadata
+from ps3toolbox.ps2.decrypt import decrypt_ps2_iso
+from ps3toolbox.ps2.decrypt import extract_metadata
 from ps3toolbox.ps2.encrypt import encrypt_ps2_iso
 from ps3toolbox.utils.disc_detect import detect_disc_number
 from ps3toolbox.utils.progress import ConsoleProgress
-from ps3toolbox.utils.validation import check_disk_space, validate_input_file, validate_output_path
+from ps3toolbox.utils.validation import check_disk_space
+from ps3toolbox.utils.validation import validate_input_file
+from ps3toolbox.utils.validation import validate_output_path
+
 
 console = Console()
 
@@ -74,7 +83,7 @@ def encrypt(
 
     except Exception as e:
         console.print(f"[red]✗[/red] Error: {e}")
-        raise click.Abort()
+        raise click.Abort() from e
 
 
 @cli.command()
@@ -101,7 +110,7 @@ def decrypt(input_path: Path, output_path: Path, mode: str, overwrite: bool) -> 
 
     except Exception as e:
         console.print(f"[red]✗[/red] Error: {e}")
-        raise click.Abort()
+        raise click.Abort() from e
 
 
 def _encrypt_single_iso(args):
@@ -188,7 +197,7 @@ def batch_encrypt(
         work_items.append((iso_file, output_file, mode, disc_num, remove_source))
 
     if not work_items:
-        console.print(f"[yellow]All files already encrypted (use --overwrite to re-encrypt)[/yellow]")
+        console.print("[yellow]All files already encrypted (use --overwrite to re-encrypt)[/yellow]")
         return
 
     console.print(f"Encrypting {len(work_items)} file(s)...\n")
@@ -258,7 +267,7 @@ def info(file_path: Path) -> None:
 
     except Exception as e:
         console.print(f"[red]✗[/red] Error: {e}")
-        raise click.Abort()
+        raise click.Abort() from e
 
 
 @cli.group()
@@ -326,9 +335,10 @@ def sync(
         console.print("\n[yellow]Operation cancelled by user[/yellow]")
     except Exception as e:
         import traceback
+
         console.print(f"[red]✗[/red] Error: {e}")
         console.print(f"[dim]{traceback.format_exc()}[/dim]")
-        raise click.Abort()
+        raise click.Abort() from e
 
 
 @cli.command()
@@ -369,7 +379,7 @@ def organize(path: Path, dry_run: bool, any_image: bool) -> None:
         console.print("\n[yellow]Operation cancelled by user[/yellow]")
     except Exception as e:
         console.print(f"[red]✗[/red] Error: {e}")
-        raise click.Abort()
+        raise click.Abort() from e
 
 
 if __name__ == "__main__":

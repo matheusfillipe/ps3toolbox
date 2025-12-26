@@ -1,9 +1,9 @@
 """Unit tests for disc_num parameter in PS2 encryption."""
 
-import struct
+from unittest.mock import patch
+
 import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+
 from ps3toolbox.ps2.encrypt import encrypt_ps2_iso
 
 
@@ -16,7 +16,7 @@ class TestDiscNumParameter:
         out_file = tmp_path / "test.bin.enc"
 
         # Create minimal valid ISO (16KB aligned)
-        iso_file.write_bytes(b'\x00' * 0x4000)
+        iso_file.write_bytes(b"\x00" * 0x4000)
 
         # Test invalid disc numbers
         with pytest.raises(ValueError, match="Disc number must be 1-9"):
@@ -47,8 +47,9 @@ class TestDiscNumParameter:
         for disc_num, expected_encoding in test_cases:
             # Test encoding formula
             disc_num_encoded = (disc_num - 1) << 24
-            assert disc_num_encoded == expected_encoding, \
-                f"Disc {disc_num}: got 0x{disc_num_encoded:08X}, expected 0x{expected_encoding:08X}"
+            assert (
+                disc_num_encoded == expected_encoding
+            ), f"Disc {disc_num}: got 0x{disc_num_encoded:08X}, expected 0x{expected_encoding:08X}"
 
             # Test that segment number is preserved in lower bytes
             segment_number = 42
@@ -59,9 +60,9 @@ class TestDiscNumParameter:
             # Verify segment number in lower bytes
             assert (combined & 0x00FFFFFF) == segment_number
 
-    @patch('ps3toolbox.ps2.encrypt.add_limg_header')
-    @patch('ps3toolbox.ps2.encrypt.pad_iso_to_boundary')
-    @patch('ps3toolbox.ps2.encrypt.validate_iso')
+    @patch("ps3toolbox.ps2.encrypt.add_limg_header")
+    @patch("ps3toolbox.ps2.encrypt.pad_iso_to_boundary")
+    @patch("ps3toolbox.ps2.encrypt.validate_iso")
     def test_disc_num_in_metadata(self, mock_validate, mock_pad, mock_limg, tmp_path):
         """Test that disc_num is correctly written to metadata."""
         # Create test ISO
@@ -69,7 +70,7 @@ class TestDiscNumParameter:
         out_file = tmp_path / "test.bin.enc"
 
         # Create simple ISO (one segment = 0x4000 bytes)
-        test_data = b'\x00' * 0x4000
+        test_data = b"\x00" * 0x4000
         iso_file.write_bytes(test_data)
 
         # Mock the functions
@@ -81,27 +82,27 @@ class TestDiscNumParameter:
         encrypt_ps2_iso(iso_file, out_file, disc_num=2)
 
         # Read output and check metadata
-        with open(out_file, 'rb') as f:
+        with open(out_file, "rb") as f:
             # Skip header (0x4000)
             f.seek(0x4000)
             # Read encrypted metadata segment
-            encrypted_meta = f.read(0x4000)
+            f.read(0x4000)
 
         # We can't easily decrypt without full setup, but we can verify
         # the file was created and has correct structure
         assert out_file.exists()
         assert out_file.stat().st_size > 0x4000  # Has header + data
 
-    @patch('ps3toolbox.ps2.encrypt.add_limg_header')
-    @patch('ps3toolbox.ps2.encrypt.pad_iso_to_boundary')
-    @patch('ps3toolbox.ps2.encrypt.validate_iso')
+    @patch("ps3toolbox.ps2.encrypt.add_limg_header")
+    @patch("ps3toolbox.ps2.encrypt.pad_iso_to_boundary")
+    @patch("ps3toolbox.ps2.encrypt.validate_iso")
     def test_default_disc_num(self, mock_validate, mock_pad, mock_limg, tmp_path):
         """Test that disc_num defaults to 1."""
         iso_file = tmp_path / "test.iso"
         out_file = tmp_path / "test.bin.enc"
 
         # Create minimal valid ISO
-        test_data = b'\x00' * 0x4000
+        test_data = b"\x00" * 0x4000
         iso_file.write_bytes(test_data)
 
         # Mock functions

@@ -4,7 +4,7 @@ import asyncio
 import re
 from dataclasses import dataclass
 from io import BytesIO
-from typing import Optional
+from typing import cast
 from urllib.parse import quote
 
 import aiohttp
@@ -14,92 +14,93 @@ from PIL import Image
 @dataclass
 class CoverSource:
     """Cover art source configuration."""
+
     name: str
     url_template: str
     requires_serial: bool
 
 
 COVER_SOURCES = {
-    'PSX': [
+    "PSX": [
         CoverSource(
-            name='xlenore-2d',
-            url_template='https://raw.githubusercontent.com/xlenore/psx-covers/main/covers/default/{serial}.jpg',
+            name="xlenore-2d",
+            url_template="https://raw.githubusercontent.com/xlenore/psx-covers/main/covers/default/{serial}.jpg",
             requires_serial=True,
         ),
         CoverSource(
-            name='xlenore-3d',
-            url_template='https://raw.githubusercontent.com/xlenore/psx-covers/main/covers/3d/{serial}.png',
+            name="xlenore-3d",
+            url_template="https://raw.githubusercontent.com/xlenore/psx-covers/main/covers/3d/{serial}.png",
             requires_serial=True,
         ),
         CoverSource(
-            name='libretro',
-            url_template='https://raw.githubusercontent.com/libretro-thumbnails/Sony_-_PlayStation/master/Named_Boxarts/{name}.png',
+            name="libretro",
+            url_template="https://raw.githubusercontent.com/libretro-thumbnails/Sony_-_PlayStation/master/Named_Boxarts/{name}.png",
             requires_serial=False,
         ),
     ],
-    'PS2': [
+    "PS2": [
         CoverSource(
-            name='xlenore-2d',
-            url_template='https://raw.githubusercontent.com/xlenore/ps2-covers/main/covers/default/{serial}.jpg',
+            name="xlenore-2d",
+            url_template="https://raw.githubusercontent.com/xlenore/ps2-covers/main/covers/default/{serial}.jpg",
             requires_serial=True,
         ),
         CoverSource(
-            name='xlenore-3d',
-            url_template='https://raw.githubusercontent.com/xlenore/ps2-covers/main/covers/3d/{serial}.png',
+            name="xlenore-3d",
+            url_template="https://raw.githubusercontent.com/xlenore/ps2-covers/main/covers/3d/{serial}.png",
             requires_serial=True,
         ),
         CoverSource(
-            name='libretro',
-            url_template='https://raw.githubusercontent.com/libretro-thumbnails/Sony_-_PlayStation_2/master/Named_Boxarts/{name}.png',
+            name="libretro",
+            url_template="https://raw.githubusercontent.com/libretro-thumbnails/Sony_-_PlayStation_2/master/Named_Boxarts/{name}.png",
             requires_serial=False,
         ),
     ],
-    'NES': [
+    "NES": [
         CoverSource(
-            name='libretro',
-            url_template='https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_Nintendo_Entertainment_System/master/Named_Boxarts/{name}.png',
+            name="libretro",
+            url_template="https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_Nintendo_Entertainment_System/master/Named_Boxarts/{name}.png",
             requires_serial=False,
         ),
     ],
-    'SNES': [
+    "SNES": [
         CoverSource(
-            name='libretro',
-            url_template='https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_Super_Nintendo_Entertainment_System/master/Named_Boxarts/{name}.png',
+            name="libretro",
+            url_template="https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_Super_Nintendo_Entertainment_System/master/Named_Boxarts/{name}.png",
             requires_serial=False,
         ),
     ],
-    'GB': [
+    "GB": [
         CoverSource(
-            name='libretro',
-            url_template='https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_Game_Boy/master/Named_Boxarts/{name}.png',
+            name="libretro",
+            url_template="https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_Game_Boy/master/Named_Boxarts/{name}.png",
             requires_serial=False,
         ),
     ],
-    'GBC': [
+    "GBC": [
         CoverSource(
-            name='libretro',
-            url_template='https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_Game_Boy_Color/master/Named_Boxarts/{name}.png',
+            name="libretro",
+            url_template="https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_Game_Boy_Color/master/Named_Boxarts/{name}.png",
             requires_serial=False,
         ),
     ],
-    'GBA': [
+    "GBA": [
         CoverSource(
-            name='libretro',
-            url_template='https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_Game_Boy_Advance/master/Named_Boxarts/{name}.png',
+            name="libretro",
+            url_template="https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_Game_Boy_Advance/master/Named_Boxarts/{name}.png",
             requires_serial=False,
         ),
     ],
-    'Genesis': [
+    "Genesis": [
         CoverSource(
-            name='libretro',
-            url_template='https://raw.githubusercontent.com/libretro-thumbnails/Sega_-_Mega_Drive_-_Genesis/master/Named_Boxarts/{name}.png',
+            name="libretro",
+            url_template="https://raw.githubusercontent.com/libretro-thumbnails/Sega_-_Mega_Drive_-_Genesis/master/Named_Boxarts/{name}.png",
             requires_serial=False,
         ),
     ],
-    'SMS': [
+    "SMS": [
         CoverSource(
-            name='libretro',
-            url_template='https://raw.githubusercontent.com/libretro-thumbnails/Sega_-_Master_System_-_Mark_III/master/Named_Boxarts/{name}.png',
+            name="libretro",
+            url_template="https://raw.githubusercontent.com/libretro-thumbnails/Sega_-_Master_System_-_Mark_III/master/Named_Boxarts/{name}.png",
             requires_serial=False,
         ),
     ],
@@ -109,9 +110,9 @@ COVER_SOURCES = {
 def clean_name_for_matching(name: str) -> str:
     """Clean game name for fuzzy matching."""
     # Remove numeric prefixes like "100. "
-    name = re.sub(r'^\d+\.\s*', '', name)
+    name = re.sub(r"^\d+\.\s*", "", name)
     # Remove extra whitespace
-    name = ' '.join(name.split())
+    name = " ".join(name.split())
     return name
 
 
@@ -146,7 +147,7 @@ class CoverDownloader:
 
     def __init__(self, max_concurrent: int = 10):
         self.max_concurrent = max_concurrent
-        self.session: Optional[aiohttp.ClientSession] = None
+        self.session: aiohttp.ClientSession | None = None
         self._semaphore = asyncio.Semaphore(max_concurrent)
         self._cover_cache: dict[str, list[str]] = {}  # platform -> list of available covers
 
@@ -160,9 +161,7 @@ class CoverDownloader:
     async def start(self):
         """Start HTTP session."""
         if self.session is None:
-            self.session = aiohttp.ClientSession(
-                headers={'User-Agent': 'ps3toolbox/0.1.0'}
-            )
+            self.session = aiohttp.ClientSession(headers={"User-Agent": "ps3toolbox/0.1.0"})
 
     async def close(self):
         """Close HTTP session."""
@@ -176,7 +175,7 @@ class CoverDownloader:
             return self._cover_cache[platform]
 
         sources = COVER_SOURCES.get(platform, [])
-        libretro_source = next((s for s in sources if s.name == 'libretro'), None)
+        libretro_source = next((s for s in sources if s.name == "libretro"), None)
 
         if not libretro_source:
             return []
@@ -184,14 +183,14 @@ class CoverDownloader:
         # Extract GitHub repo path from URL
         # e.g., https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_Super_Nintendo_Entertainment_System/master/Named_Boxarts/{name}.png
         # -> https://api.github.com/repos/libretro-thumbnails/Nintendo_-_Super_Nintendo_Entertainment_System/contents/Named_Boxarts
-        parts = libretro_source.url_template.split('/')
+        parts = libretro_source.url_template.split("/")
         if len(parts) < 7:
             return []
 
         repo_owner = parts[3]
         repo_name = parts[4]
         branch = parts[5]
-        folder_path = '/'.join(parts[6:-1])  # Remove {name}.png part
+        folder_path = "/".join(parts[6:-1])  # Remove {name}.png part
 
         api_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/contents/{folder_path}?ref={branch}"
 
@@ -202,12 +201,16 @@ class CoverDownloader:
                     if resp.status == 200:
                         files = await resp.json()
                         # Extract filenames without extension
-                        cover_names = [f['name'].rsplit('.', 1)[0] for f in files if f['type'] == 'file' and f['name'].endswith('.png')]
+                        cover_names = [
+                            f["name"].rsplit(".", 1)[0]
+                            for f in files
+                            if f["type"] == "file" and f["name"].endswith(".png")
+                        ]
                         self._cover_cache[platform] = cover_names
                         return cover_names
                     elif resp.status == 403:  # Rate limited
                         if attempt < 2:
-                            await asyncio.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s
+                            await asyncio.sleep(2**attempt)  # Exponential backoff: 1s, 2s
                             continue
             except Exception:
                 if attempt < 2:
@@ -221,18 +224,18 @@ class CoverDownloader:
         try:
             # Map platform codes to better search terms
             platform_search_names = {
-                'Atari2600': 'Atari 2600',
-                'Atari5200': 'Atari 5200',
-                'Atari7800': 'Atari 7800',
-                'NES': 'Nintendo NES',
-                'SNES': 'Super Nintendo SNES',
-                'GB': 'Game Boy',
-                'GBC': 'Game Boy Color',
-                'GBA': 'Game Boy Advance',
-                'Genesis': 'Sega Genesis',
-                'SMS': 'Sega Master System',
-                'PSX': 'PlayStation 1 PS1',
-                'PS2': 'PlayStation 2',
+                "Atari2600": "Atari 2600",
+                "Atari5200": "Atari 5200",
+                "Atari7800": "Atari 7800",
+                "NES": "Nintendo NES",
+                "SNES": "Super Nintendo SNES",
+                "GB": "Game Boy",
+                "GBC": "Game Boy Color",
+                "GBA": "Game Boy Advance",
+                "Genesis": "Sega Genesis",
+                "SMS": "Sega Master System",
+                "PSX": "PlayStation 1 PS1",
+                "PS2": "PlayStation 2",
             }
             search_platform = platform_search_names.get(platform, platform)
 
@@ -240,16 +243,16 @@ class CoverDownloader:
 
             # Use Google Images search with simple scraping
             async with self.session.get(
-                'https://www.google.com/search',
+                "https://www.google.com/search",
                 params={
-                    'q': search_query,
-                    'tbm': 'isch',  # Image search
-                    'safe': 'off',
+                    "q": search_query,
+                    "tbm": "isch",  # Image search
+                    "safe": "off",
                 },
                 headers={
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                 },
-                timeout=aiohttp.ClientTimeout(total=15)
+                timeout=aiohttp.ClientTimeout(total=15),
             ) as resp:
                 if resp.status != 200:
                     return []
@@ -264,19 +267,19 @@ class CoverDownloader:
                 img_pattern = r'<img[^>]+src="([^"]+)"[^>]*>'
                 for match in re.finditer(img_pattern, html):
                     url = match.group(1)
-                    if url.startswith('http') and not 'google' in url:
+                    if url.startswith("http") and "google" not in url:
                         urls.append(url)
 
                 # Pattern 2: URLs in JSON data
                 json_pattern = r'"ou":"([^"]+)"'
                 for match in re.finditer(json_pattern, html):
                     url = match.group(1)
-                    if url.startswith('http'):
+                    if url.startswith("http"):
                         urls.append(url)
 
                 # Return first 5 unique URLs
                 seen = set()
-                unique_urls = []
+                unique_urls: list[str] = []
                 for url in urls:
                     if url not in seen and len(unique_urls) < 5:
                         seen.add(url)
@@ -290,10 +293,10 @@ class CoverDownloader:
     async def download_cover(
         self,
         platform: str,
-        serial: Optional[str],
+        serial: str | None,
         game_name: str,
-        resize: Optional[tuple[int, int]] = (240, 240),
-    ) -> Optional[tuple[bytes, str, str]]:
+        resize: tuple[int, int] | None = (240, 240),
+    ) -> tuple[bytes, str, str] | None:
         """
         Download cover from multiple sources with fallback and fuzzy matching.
 
@@ -335,7 +338,7 @@ class CoverDownloader:
                     return result, source.name, url
 
                 # If LibRetro and exact match failed, try fuzzy matching
-                if source.name == 'libretro' and lookup_name:
+                if source.name == "libretro" and lookup_name:
                     available_covers = await self._fetch_available_covers(platform)
                     if available_covers:
                         # Find best match
@@ -366,8 +369,8 @@ class CoverDownloader:
     async def _download_from_url(
         self,
         url: str,
-        resize: Optional[tuple[int, int]] = None,
-    ) -> Optional[bytes]:
+        resize: tuple[int, int] | None = None,
+    ) -> bytes | None:
         """Download and optionally resize image from URL."""
         try:
             async with self.session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
@@ -386,16 +389,17 @@ class CoverDownloader:
 
     async def _resize_image(self, data: bytes, size: tuple[int, int]) -> bytes:
         """Resize image to target size while maintaining aspect ratio."""
+
         def _resize():
             img = Image.open(BytesIO(data))
 
             # Convert to RGB if needed (for PNG with transparency)
-            if img.mode in ('RGBA', 'LA', 'P'):
+            if img.mode in ("RGBA", "LA", "P"):
                 # Create white background
-                background = Image.new('RGB', img.size, (255, 255, 255))
-                if img.mode == 'P':
-                    img = img.convert('RGBA')
-                background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                background = Image.new("RGB", img.size, (255, 255, 255))
+                if img.mode == "P":
+                    img = img.convert("RGBA")
+                background.paste(img, mask=img.split()[-1] if img.mode == "RGBA" else None)
                 img = background
 
             # Resize maintaining aspect ratio
@@ -403,16 +407,16 @@ class CoverDownloader:
 
             # Convert to target format (PNG)
             output = BytesIO()
-            img.save(output, format='PNG', optimize=True)
+            img.save(output, format="PNG", optimize=True)
             return output.getvalue()
 
         return await asyncio.to_thread(_resize)
 
     async def download_batch(
         self,
-        tasks: list[tuple[str, Optional[str], str]],
-        resize: Optional[tuple[int, int]] = (240, 240),
-    ) -> list[Optional[tuple[bytes, str, str]]]:
+        tasks: list[tuple[str, str | None, str]],
+        resize: tuple[int, int] | None = (240, 240),
+    ) -> list[tuple[bytes, str, str] | None]:
         """
         Download multiple covers in parallel.
 
@@ -425,7 +429,7 @@ class CoverDownloader:
         """
         await self.start()
 
-        async def _download_task(platform: str, serial: Optional[str], game_name: str):
+        async def _download_task(platform: str, serial: str | None, game_name: str):
             return await self.download_cover(platform, serial, game_name, resize)
 
         results = await asyncio.gather(
@@ -434,4 +438,4 @@ class CoverDownloader:
         )
 
         # Convert exceptions to None
-        return [r if not isinstance(r, Exception) else None for r in results]
+        return [cast(tuple[bytes, str, str] | None, r) if not isinstance(r, Exception) else None for r in results]

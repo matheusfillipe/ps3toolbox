@@ -1,9 +1,10 @@
 """Tests for ISO operations."""
 
 import pytest
-from pathlib import Path
-from ps3toolbox.core.iso import validate_iso, get_iso_size, pad_iso_to_boundary
-from ps3toolbox.utils.errors import InvalidISOError
+
+from ps3toolbox.core.iso import get_iso_size
+from ps3toolbox.core.iso import pad_iso_to_boundary
+from ps3toolbox.core.iso import validate_iso
 
 
 def test_get_iso_size(tmp_path):

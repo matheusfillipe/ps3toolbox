@@ -1,14 +1,13 @@
 """Tests for cryptographic operations."""
 
-import pytest
-from ps3toolbox.core.crypto import (
-    aes128_cbc_encrypt,
-    aes128_cbc_decrypt,
-    derive_keys,
-    calculate_sha1,
-    calculate_omac
-)
-from ps3toolbox.core.keys import PS2_KEY_CEX_DATA, PS2_KEY_CEX_META, PS2_PLACEHOLDER_KLIC
+from ps3toolbox.core.crypto import aes128_cbc_decrypt
+from ps3toolbox.core.crypto import aes128_cbc_encrypt
+from ps3toolbox.core.crypto import calculate_omac
+from ps3toolbox.core.crypto import calculate_sha1
+from ps3toolbox.core.crypto import derive_keys
+from ps3toolbox.core.keys import PS2_KEY_CEX_DATA
+from ps3toolbox.core.keys import PS2_KEY_CEX_META
+from ps3toolbox.core.keys import PS2_PLACEHOLDER_KLIC
 
 
 def test_aes_encryption_decryption_roundtrip():
@@ -26,11 +25,7 @@ def test_aes_encryption_decryption_roundtrip():
 
 def test_derive_keys():
     """Test key derivation produces deterministic results."""
-    data_key, meta_key = derive_keys(
-        PS2_KEY_CEX_DATA,
-        PS2_KEY_CEX_META,
-        PS2_PLACEHOLDER_KLIC
-    )
+    data_key, meta_key = derive_keys(PS2_KEY_CEX_DATA, PS2_KEY_CEX_META, PS2_PLACEHOLDER_KLIC)
 
     assert len(data_key) == 16
     assert len(meta_key) == 16
@@ -40,17 +35,9 @@ def test_derive_keys():
 
 def test_derive_keys_deterministic():
     """Test key derivation is deterministic."""
-    data_key1, meta_key1 = derive_keys(
-        PS2_KEY_CEX_DATA,
-        PS2_KEY_CEX_META,
-        PS2_PLACEHOLDER_KLIC
-    )
+    data_key1, meta_key1 = derive_keys(PS2_KEY_CEX_DATA, PS2_KEY_CEX_META, PS2_PLACEHOLDER_KLIC)
 
-    data_key2, meta_key2 = derive_keys(
-        PS2_KEY_CEX_DATA,
-        PS2_KEY_CEX_META,
-        PS2_PLACEHOLDER_KLIC
-    )
+    data_key2, meta_key2 = derive_keys(PS2_KEY_CEX_DATA, PS2_KEY_CEX_META, PS2_PLACEHOLDER_KLIC)
 
     assert data_key1 == data_key2
     assert meta_key1 == meta_key2

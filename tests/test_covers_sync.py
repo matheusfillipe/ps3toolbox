@@ -1,12 +1,18 @@
 """Unit tests for cover sync functionality."""
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
+from unittest.mock import AsyncMock
+from unittest.mock import MagicMock
+from unittest.mock import patch
+
+import pytest
 
 from ps3toolbox.covers.downloader import CoverDownloader
-from ps3toolbox.games.metadata import SerialResolver, RomDatabase, extract_serial_from_filename, clean_game_name
-from ps3toolbox.games.scanner import GameScanner, GameFile
+from ps3toolbox.games.metadata import RomDatabase
+from ps3toolbox.games.metadata import SerialResolver
+from ps3toolbox.games.metadata import clean_game_name
+from ps3toolbox.games.metadata import extract_serial_from_filename
+from ps3toolbox.games.scanner import GameScanner
 from ps3toolbox.utils.fs import LocalFilesystem
 
 
@@ -92,7 +98,7 @@ class TestCoverDownloader:
         mock_response.status = 200
         mock_response.read = AsyncMock(return_value=b"fake_image_data")
 
-        with patch('aiohttp.ClientSession.get') as mock_get:
+        with patch("aiohttp.ClientSession.get") as mock_get:
             mock_get.return_value.__aenter__.return_value = mock_response
 
             await downloader.start()
@@ -105,9 +111,10 @@ class TestCoverDownloader:
             await downloader.close()
 
             assert result is not None
-            data, source = result
+            data, source, url = result
             assert data == b"fake_image_data"
             assert source in ["xlenore-2d", "xlenore-3d", "libretro"]
+            assert url  # URL should be present
 
     async def test_download_cover_fallback(self):
         """Test fallback to next source when first fails."""
@@ -133,7 +140,7 @@ class TestCoverDownloader:
             async_cm.__aexit__.return_value = None
             return async_cm
 
-        with patch('aiohttp.ClientSession.get', side_effect=mock_get_side_effect):
+        with patch("aiohttp.ClientSession.get", side_effect=mock_get_side_effect):
             await downloader.start()
             result = await downloader.download_cover(
                 platform="PS2",
@@ -154,7 +161,7 @@ class TestCoverDownloader:
         mock_response.status = 200
         mock_response.read = AsyncMock(return_value=b"libretro_image")
 
-        with patch('aiohttp.ClientSession.get') as mock_get:
+        with patch("aiohttp.ClientSession.get") as mock_get:
             mock_get.return_value.__aenter__.return_value = mock_response
 
             await downloader.start()
@@ -167,8 +174,9 @@ class TestCoverDownloader:
             await downloader.close()
 
             assert result is not None
-            data, source = result
+            data, source, url = result
             assert source == "libretro"
+            assert url  # URL should be present
 
 
 @pytest.mark.asyncio
@@ -278,9 +286,7 @@ class TestSerialResolver:
         """Test resolving serial via fuzzy matching."""
         # Create mock database
         db_file = tmp_path / "PS2.tsv"
-        db_file.write_text(
-            "PS2\tUSA\tGran Turismo 4 (SLUS-21001)\tgt4.zip\t5000000000\n"
-        )
+        db_file.write_text("PS2\tUSA\tGran Turismo 4 (SLUS-21001)\tgt4.zip\t5000000000\n")
 
         db = RomDatabase()
         db.load_from_tsv(db_file)

@@ -23,16 +23,16 @@ def detect_disc_number(filename: str) -> int:
     """
     # Patterns to match disc numbers
     patterns = [
-        r'disc[\s_-]*(\d)',  # disc 1, disc_1, disc-1, disc1
-        r'disk[\s_-]*(\d)',  # disk 1, disk_1, disk-1, disk1
-        r'cd[\s_-]*(\d)',    # cd 1, cd_1, cd-1, cd1
-        r'd[\s_-]*(\d)',     # d 1, d_1, d-1, d1
-        r'\(disc[\s_]*(\d)\)',  # (disc 1), (disc1)
-        r'\[disc[\s_]*(\d)\]',  # [disc 1], [disc1]
-        r'\(cd[\s_]*(\d)\)',    # (cd 1), (cd1)
-        r'\[cd[\s_]*(\d)\]',    # [cd 1], [cd1]
-        r'\(d[\s_]*(\d)\)',     # (d 1), (d1)
-        r'\[d[\s_]*(\d)\]',     # [d 1], [d1]
+        r"disc[\s_-]*(\d)",  # disc 1, disc_1, disc-1, disc1
+        r"disk[\s_-]*(\d)",  # disk 1, disk_1, disk-1, disk1
+        r"cd[\s_-]*(\d)",  # cd 1, cd_1, cd-1, cd1
+        r"d[\s_-]*(\d)",  # d 1, d_1, d-1, d1
+        r"\(disc[\s_]*(\d)\)",  # (disc 1), (disc1)
+        r"\[disc[\s_]*(\d)\]",  # [disc 1], [disc1]
+        r"\(cd[\s_]*(\d)\)",  # (cd 1), (cd1)
+        r"\[cd[\s_]*(\d)\]",  # [cd 1], [cd1]
+        r"\(d[\s_]*(\d)\)",  # (d 1), (d1)
+        r"\[d[\s_]*(\d)\]",  # [d 1], [d1]
     ]
 
     filename_lower = filename.lower()

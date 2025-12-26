@@ -1,7 +1,6 @@
 """Game organizer for PS1/PS2 folder structure management."""
 
 from dataclasses import dataclass
-from typing import Optional
 
 from ps3toolbox.utils.fs import FilesystemProvider
 
@@ -9,6 +8,7 @@ from ps3toolbox.utils.fs import FilesystemProvider
 @dataclass
 class OrganizeAction:
     """Represents a file organization action."""
+
     action_type: str
     src: str
     dst: str
@@ -45,7 +45,7 @@ class GameOrganizer:
         Returns:
             List of organization actions performed
         """
-        actions = []
+        actions: list[OrganizeAction] = []
 
         # Check if files are already organized
         if len(game_files) == 0:
@@ -61,12 +61,14 @@ class GameOrganizer:
 
         # Create target folder
         if not await self.fs.exists(target_folder):
-            actions.append(OrganizeAction(
-                action_type='mkdir',
-                src='',
-                dst=target_folder,
-                reason=f'Create folder for {game_name}',
-            ))
+            actions.append(
+                OrganizeAction(
+                    action_type="mkdir",
+                    src="",
+                    dst=target_folder,
+                    reason=f"Create folder for {game_name}",
+                )
+            )
             await self.fs.mkdir(target_folder)
 
         # Move all game files to target folder
@@ -75,12 +77,14 @@ class GameOrganizer:
             dst_path = self.fs.join_path(target_folder, filename)
 
             if file_path != dst_path:
-                actions.append(OrganizeAction(
-                    action_type='move',
-                    src=file_path,
-                    dst=dst_path,
-                    reason=f'Organize {filename} into game folder',
-                ))
+                actions.append(
+                    OrganizeAction(
+                        action_type="move",
+                        src=file_path,
+                        dst=dst_path,
+                        reason=f"Organize {filename} into game folder",
+                    )
+                )
                 await self.fs.rename(file_path, dst_path)
 
         return actions
@@ -107,7 +111,7 @@ class GameOrganizer:
         Returns:
             List of organization actions performed
         """
-        actions = []
+        actions: list[OrganizeAction] = []
 
         # Get current folder
         current_folder = self.fs.dirname(iso_path)
@@ -119,12 +123,14 @@ class GameOrganizer:
 
         # Create target folder
         if not await self.fs.exists(target_folder):
-            actions.append(OrganizeAction(
-                action_type='mkdir',
-                src='',
-                dst=target_folder,
-                reason=f'Create folder for {game_name}',
-            ))
+            actions.append(
+                OrganizeAction(
+                    action_type="mkdir",
+                    src="",
+                    dst=target_folder,
+                    reason=f"Create folder for {game_name}",
+                )
+            )
             await self.fs.mkdir(target_folder)
 
         # Move ISO to target folder
@@ -132,12 +138,14 @@ class GameOrganizer:
         dst_path = self.fs.join_path(target_folder, filename)
 
         if iso_path != dst_path:
-            actions.append(OrganizeAction(
-                action_type='move',
-                src=iso_path,
-                dst=dst_path,
-                reason=f'Organize {filename} into game folder',
-            ))
+            actions.append(
+                OrganizeAction(
+                    action_type="move",
+                    src=iso_path,
+                    dst=dst_path,
+                    reason=f"Organize {filename} into game folder",
+                )
+            )
             await self.fs.rename(iso_path, dst_path)
 
         return actions
@@ -146,7 +154,7 @@ class GameOrganizer:
         self,
         folder: str,
         game_name: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Find existing cover image in folder.
 
@@ -158,7 +166,7 @@ class GameOrganizer:
         Returns:
             Path to cover file or None
         """
-        cover_exts = ['.PNG', '.png', '.JPG', '.jpg']
+        cover_exts = [".PNG", ".png", ".JPG", ".jpg"]
 
         # Check for exact match
         for ext in cover_exts:
@@ -179,7 +187,7 @@ class GameOrganizer:
             if item.is_dir:
                 continue
 
-            file_ext = self.fs.basename(item.path)[self.fs.basename(item.path).rfind('.'):]
+            file_ext = self.fs.basename(item.path)[self.fs.basename(item.path).rfind(".") :]
             if file_ext in cover_exts:
                 images.append(item.path)
 
@@ -192,7 +200,7 @@ class GameOrganizer:
         self,
         cover_path: str,
         game_name: str,
-    ) -> Optional[OrganizeAction]:
+    ) -> OrganizeAction | None:
         """
         Rename existing cover to match game name.
 
@@ -204,10 +212,10 @@ class GameOrganizer:
             OrganizeAction if rename needed, None otherwise
         """
         folder = self.fs.dirname(cover_path)
-        current_ext = cover_path[cover_path.rfind('.'):]
+        current_ext = cover_path[cover_path.rfind(".") :]
 
         # Target: uppercase extension for webMAN compatibility
-        target_ext = '.PNG' if current_ext.lower() == '.png' else '.JPG'
+        target_ext = ".PNG" if current_ext.lower() == ".png" else ".JPG"
         target_name = game_name + target_ext
         target_path = self.fs.join_path(folder, target_name)
 
@@ -215,10 +223,10 @@ class GameOrganizer:
             return None
 
         action = OrganizeAction(
-            action_type='rename',
+            action_type="rename",
             src=cover_path,
             dst=target_path,
-            reason=f'Rename cover to match game name',
+            reason="Rename cover to match game name",
         )
 
         await self.fs.rename(cover_path, target_path)

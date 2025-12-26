@@ -2,6 +2,7 @@
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from typing import Any
 
 from ps3toolbox.utils.fs import FilesystemProvider
 
@@ -100,7 +101,6 @@ class GameScanner:
                     platform_paths[platform] = item.path
                     break
 
-
         # Scan each platform
         if "PS1" in platform_paths:
             async for game in self._scan_ps1(platform_paths["PS1"]):
@@ -136,7 +136,7 @@ class GameScanner:
         """Scan directory for disc-based games (PS1/PS2)."""
         async for game_folder in self._find_game_folders(base_path):
             # Group files by game
-            game_files = {}
+            game_files: dict[str, dict[str, Any]] = {}
 
             async for item in self.fs.list_dir(game_folder):
                 if item.is_dir:
